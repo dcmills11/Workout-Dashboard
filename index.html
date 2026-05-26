@@ -1797,16 +1797,33 @@ function renderOverviewLiftStat(id, liftKey) {
     if (subEl) subEl.textContent = 'no data yet';
     return;
   }
-  // Highest top-set weight ever recorded for this lift
-  const best = history.reduce((m, h) => h.weight > m.weight ? h : m, history[0]);
-  // Most recent top set
-  const latest = history[history.length - 1];
-  valEl.innerHTML = `${best.weight}<span class="stat-unit">lb</span>`;
-  if (subEl) {
-    if (best.date === latest.date && best.weight === latest.weight) {
-      subEl.textContent = `${best.reps} reps · ${formatDateShort(best.date)} (PR)`;
-    } else {
-      subEl.textContent = `${best.reps} reps · ${formatDateShort(best.date)} · last: ${latest.weight}lb ${formatDateShort(latest.date)}`;
+
+  // All-time best
+  const allTimeBest = history.reduce((m, h) => h.weight > m.weight ? h : m, history[0]);
+
+  // Best in the last 90 days
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 90);
+  cutoff.setHours(0, 0, 0, 0);
+  const recent = history.filter(h => new Date(h.date + 'T12:00:00') >= cutoff);
+  const recentBest = recent.length
+    ? recent.reduce((m, h) => h.weight > m.weight ? h : m, recent[0])
+    : null;
+
+  if (recentBest) {
+    const isPR = recentBest.weight >= allTimeBest.weight;
+    valEl.innerHTML = `${recentBest.weight}<span class="stat-unit">lb</span>`;
+    if (subEl) {
+      const recentLine = `<span>${recentBest.reps} reps · ${formatDateShort(recentBest.date)}${isPR ? ' · PR' : ''}</span>`;
+      const allTimeLine = isPR
+        ? ''
+        : `<span style="display:block;margin-top:2px;font-size:10.5px;color:var(--text3)">all-time: <strong style="color:var(--text2);font-weight:500">${allTimeBest.weight} lb</strong> · ${formatDateShort(allTimeBest.date)}</span>`;
+      subEl.innerHTML = recentLine + allTimeLine;
+    }
+  } else {
+    valEl.textContent = '—';
+    if (subEl) {
+      subEl.innerHTML = `<span>no sets in last 90 days</span><span style="display:block;margin-top:2px;font-size:10.5px;color:var(--text3)">all-time: <strong style="color:var(--text2);font-weight:500">${allTimeBest.weight} lb</strong> · ${formatDateShort(allTimeBest.date)}</span>`;
     }
   }
 }
