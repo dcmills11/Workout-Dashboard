@@ -2138,6 +2138,101 @@ function setStrengthRange(range, btn) {
   renderStrengthChart();
 }
 
+// Returns {startDate, endDate} for chart x-axis — shared across all main lifts
+function getStrengthChartDateRange() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
+
+  if (strengthRange === 'all') {
+    let minDate = null, maxDate = null;
+    for (const lift of MAIN_LIFTS) {
+      const h = getStrengthHistory(lift.key);
+      if (!h.length) continue;
+      if (!minDate || h[0].date < minDate) minDate = h[0].date;
+      if (!maxDate || h[h.length - 1].date > maxDate) maxDate = h[h.length - 1].date;
+    }
+    if (!minDate) return null;
+    return { startDate: minDate, endDate: maxDate < todayStr ? todayStr : maxDate };
+  }
+
+  const cutoff = getStrengthRangeCutoff();
+  return {
+    startDate: cutoff.toISOString().split('T')[0],
+    endDate: todayStr,
+  };
+}
+
+// Compute "nice" y-axis bounds with step always a multiple of 5/10/25/50
+function niceYAxisRange(min, max) {
+  if (max === min) {
+    const floor5 = Math.floor((min - 5) / 5) * 5;
+    return { yMin: floor5, yMax: floor5 + 10, step: 5 };
+  }
+  const range = max - min;
+  const rawStep = range / 4;
+  let step;
+  if (rawStep <= 5)       step = 5;
+  else if (rawStep <= 10) step = 10;
+  else if (rawStep <= 25) step = 25;
+  else if (rawStep <= 50) step = 50;
+  else                    step = Math.ceil(rawStep / 50) * 50;
+  const yMin = Math.floor(min / step) * step;
+  const yMax = Math.ceil(max / step) * step;
+  return { yMin, yMax, step };
+}
+
+// Generate x-axis tick labels at meaningful date boundaries based on the range mode
+function generateXAxisTicks(startDate, endDate, range) {
+  const start = new Date(startDate + 'T12:00:00');
+  const end = new Date(endDate + 'T12:00:00');
+  const ticks = [];
+
+  if (range === 'all') {
+    // Jan 1 + Jul 1 of each year that intersects the range
+    const startYear = start.getFullYear();
+    const endYear = end.getFullYear();
+    for (let y = startYear; y <= endYear; y++) {
+      const jan = new Date(y, 0, 1, 12);
+      const jul = new Date(y, 6, 1, 12);
+      if (jan >= start && jan <= end) ticks.push({ time: jan.getTime(), label: `Jan '${String(y).slice(-2)}` });
+      if (jul >= start && jul <= end) ticks.push({ time: jul.getTime(), label: `Jul '${String(y).slice(-2)}` });
+    }
+  } else if (range === '1y') {
+    // Quarterly markers
+    const startYear = start.getFullYear();
+    const endYear = end.getFullYear();
+    for (let y = startYear; y <= endYear; y++) {
+      for (const m of [0, 3, 6, 9]) {
+        const d = new Date(y, m, 1, 12);
+        if (d >= start && d <= end) {
+          ticks.push({ time: d.getTime(), label: d.toLocaleDateString('en-US', { month:'short', year:'2-digit' }) });
+        }
+      }
+    }
+  } else if (range === '90d') {
+    // Monthly markers at 1st of month
+    const cur = new Date(start.getFullYear(), start.getMonth(), 1, 12);
+    while (cur <= end) {
+      if (cur >= start) {
+        ticks.push({ time: cur.getTime(), label: cur.toLocaleDateString('en-US', { month:'short' }) });
+      }
+      cur.setMonth(cur.getMonth() + 1);
+    }
+  } else {
+    // Meso (~6wk) — Mondays every 1-2 weeks
+    const cur = new Date(start);
+    while (cur.getDay() !== 1) cur.setDate(cur.getDate() + 1);
+    cur.setHours(12, 0, 0, 0);
+    const stepDays = ((end - start) / 86400000) > 28 ? 14 : 7;
+    while (cur <= end) {
+      ticks.push({ time: cur.getTime(), label: cur.toLocaleDateString('en-US', { month:'short', day:'numeric' }) });
+      cur.setDate(cur.getDate() + stepDays);
+    }
+  }
+  return ticks;
+}
+
 function renderStrengthChart() {
   const lift = MAIN_LIFTS.find(l => l.key === currentLift);
   if (!lift) return;
@@ -2150,14 +2245,28 @@ function renderStrengthChart() {
 
   titleEl.textContent = lift.label;
   const fullHistory = getStrengthHistory(currentLift);
-  const cutoff = getStrengthRangeCutoff();
-  const history = cutoff
-    ? fullHistory.filter(h => new Date(h.date + 'T12:00:00') >= cutoff)
-    : fullHistory;
+  const dateRange = getStrengthChartDateRange();
+
+  if (!dateRange) {
+    wrap.innerHTML = `<div class="chart-empty">No strength data yet — import sessions to see progression.</div>`;
+    if (tableEl) tableEl.innerHTML = '';
+    if (trendEl) trendEl.textContent = '';
+    return;
+  }
+
+  const { startDate, endDate } = dateRange;
+  const startTime = new Date(startDate + 'T12:00:00').getTime();
+  const endTime = new Date(endDate + 'T12:00:00').getTime();
+
+  // Filter selected lift's history to the chart's date range
+  const history = fullHistory.filter(h => {
+    const t = new Date(h.date + 'T12:00:00').getTime();
+    return t >= startTime && t <= endTime;
+  });
 
   if (!history.length) {
     const msg = fullHistory.length
-      ? `No ${lift.label} sessions in the selected range. Showing ${fullHistory.length} session${fullHistory.length === 1 ? '' : 's'} all-time — try "All-time".`
+      ? `No ${lift.label} sessions in the selected range. Try a wider range.`
       : `No ${lift.label} data yet — import sessions to see progression.`;
     wrap.innerHTML = `<div class="chart-empty">${msg}</div>`;
     if (tableEl) tableEl.innerHTML = '';
@@ -2174,49 +2283,48 @@ function renderStrengthChart() {
   }
 
   // SVG line chart
-  const PAD = { top: 20, right: 20, bottom: 32, left: 44 };
+  const PAD = { top: 20, right: 20, bottom: 32, left: 50 };
   const W = 600, H = 160;
   const iW = W - PAD.left - PAD.right;
   const iH = H - PAD.top - PAD.bottom;
 
+  // Y axis (nice multiples of 5/10/25/50)
   const weights = history.map(h => h.weight);
-  const yMin = Math.min(...weights) * 0.97;
-  const yMax = Math.max(...weights) * 1.02;
-  const n = history.length;
+  const wmin = Math.min(...weights);
+  const wmax = Math.max(...weights);
+  const { yMin, yMax, step: yStep } = niceYAxisRange(wmin, wmax);
 
-  const sx = (i) => PAD.left + (n > 1 ? (i / (n - 1)) * iW : iW / 2);
+  // Date-based x-scale (shared across all lifts via startTime/endTime)
+  const sxTime = (t) => endTime === startTime ? PAD.left + iW / 2 : PAD.left + ((t - startTime) / (endTime - startTime)) * iW;
+  const sxDate = (dateStr) => sxTime(new Date(dateStr + 'T12:00:00').getTime());
   const sy = (v) => PAD.top + iH - ((v - yMin) / (yMax - yMin || 1)) * iH;
 
-  const pts = history.map((h, i) => `${sx(i)},${sy(h.weight)}`);
+  // Build line/area paths
+  const pts = history.map(h => `${sxDate(h.date)},${sy(h.weight)}`);
   const linePath = `M ${pts.join(' L ')}`;
-  const areaPath = `M ${sx(0)},${PAD.top + iH} L ${pts.join(' L ')} L ${sx(n-1)},${PAD.top + iH} Z`;
+  const areaPath = `M ${sxDate(history[0].date)},${PAD.top + iH} L ${pts.join(' L ')} L ${sxDate(history[history.length - 1].date)},${PAD.top + iH} Z`;
 
-  // Y axis labels
-  const yTicks = 4;
+  // Y axis labels at every yStep increment
   let yLabels = '';
-  for (let t = 0; t <= yTicks; t++) {
-    const v = yMin + (yMax - yMin) * (t / yTicks);
+  for (let v = yMin; v <= yMax + 0.001; v += yStep) {
     const y = sy(v);
-    yLabels += `<text x="${PAD.left - 6}" y="${y}" text-anchor="end" dominant-baseline="middle" class="chart-label">${Math.round(v)}</text>
-    <line x1="${PAD.left}" y1="${y}" x2="${PAD.left + iW}" y2="${y}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>`;
+    yLabels += `<text x="${PAD.left - 6}" y="${y}" text-anchor="end" dominant-baseline="middle" class="chart-label">${v}</text>
+      <line x1="${PAD.left}" y1="${y}" x2="${PAD.left + iW}" y2="${y}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>`;
   }
 
-  // X axis labels (every Nth) — include year if data spans multiple years
-  const yearsSpanned = new Set(history.map(h => h.date.slice(0, 4))).size;
-  const multiYear = yearsSpanned > 1;
+  // X axis labels at meaningful date boundaries
+  const xTicks = generateXAxisTicks(startDate, endDate, strengthRange);
   let xLabels = '';
-  const step = Math.max(1, Math.floor(n / 6));
-  history.forEach((h, i) => {
-    if (i % step === 0 || i === n - 1) {
-      const x = sx(i);
-      const lbl = formatDateCompact(h.date, multiYear);
-      xLabels += `<text x="${x}" y="${PAD.top + iH + 14}" text-anchor="middle" class="chart-label">${lbl}</text>`;
-    }
-  });
+  for (const t of xTicks) {
+    const x = sxTime(t.time);
+    if (x < PAD.left - 1 || x > PAD.left + iW + 1) continue;
+    xLabels += `<line x1="${x}" y1="${PAD.top}" x2="${x}" y2="${PAD.top + iH}" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+      <text x="${x}" y="${PAD.top + iH + 14}" text-anchor="middle" class="chart-label">${t.label}</text>`;
+  }
 
-  // Dots
-  const dots = history.map((h, i) =>
-    `<circle cx="${sx(i)}" cy="${sy(h.weight)}" r="3.5" fill="${lift.color}" stroke="var(--surface)" stroke-width="1.5">
+  // Data dots
+  const dots = history.map(h =>
+    `<circle cx="${sxDate(h.date)}" cy="${sy(h.weight)}" r="3.5" fill="${lift.color}" stroke="var(--surface)" stroke-width="1.5">
       <title>${formatDateShort(h.date)}: ${h.weight} lb × ${h.reps}</title>
     </circle>`
   ).join('');
@@ -2229,10 +2337,10 @@ function renderStrengthChart() {
       </linearGradient>
     </defs>
     ${yLabels}
+    ${xLabels}
     <path d="${areaPath}" fill="url(#areaGrad)"/>
     <path d="${linePath}" fill="none" stroke="${lift.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     ${dots}
-    ${xLabels}
   </svg>`;
 
   // Recent sets table
