@@ -301,6 +301,68 @@ body {
 .ex-empty-history { color: var(--text3); font-size: 11px; font-style: italic; }
 .ex-custom-flag { font-size: 9px; color: var(--accent4); text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 6px; background: rgba(160,107,255,0.1); border-radius: 4px; }
 
+/* NEXT WORKOUT CARD (Planner page) */
+.next-workout-card {
+  background: linear-gradient(180deg, var(--surface) 0%, rgba(232,255,107,0.025) 100%);
+  border: 1px solid rgba(232,255,107,0.18);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--rad-lg);
+  padding: 22px 24px;
+  margin-bottom: 24px;
+}
+.nw-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.nw-title-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.nw-section-label { font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); }
+.nw-date-line { font-size: 15px; font-weight: 600; color: var(--text); font-family: 'Syne', sans-serif; letter-spacing: -0.2px; }
+.nw-when {
+  font-size: 11px; padding: 3px 10px; border-radius: 99px;
+  background: var(--surface2); color: var(--text2);
+  font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.nw-when.today { background: rgba(232,255,107,0.18); color: var(--accent); }
+.nw-when.tomorrow { background: rgba(107,255,213,0.15); color: var(--accent3); }
+.nw-stats { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.nw-exercises { display: flex; flex-direction: column; gap: 8px; }
+.nw-exercise {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 11px 14px;
+  background: var(--surface2);
+  border-radius: var(--rad);
+}
+.nw-ex-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.nw-ex-num { color: var(--text3); font-size: 11px; font-family: 'Syne', sans-serif; font-weight: 700; min-width: 18px; }
+.nw-ex-name { font-size: 14px; font-weight: 500; flex: 1; }
+.nw-ex-sets { font-family: 'Syne', sans-serif; font-weight: 700; color: var(--accent); font-size: 13px; }
+.nw-ex-muscles { font-size: 11px; color: var(--text3); }
+.nw-ex-last { font-size: 12px; color: var(--text2); padding-left: 26px; }
+.nw-ex-last.empty { color: var(--text3); font-style: italic; }
+.nw-ex-last .w-val { color: var(--text); }
+
+.nw-footer {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.nw-empty {
+  text-align: center;
+  padding: 30px 20px;
+  color: var(--text3);
+}
+.nw-empty p { font-size: 13px; margin-bottom: 14px; }
+
 /* MESO BAR */
 .meso-bar {
   background: var(--surface);
@@ -430,12 +492,12 @@ body {
     <div class="logo">FORGE<span>Hypertrophy · PPL · Athletic</span></div>
     <div class="nav-section">
       <div class="nav-label">Training</div>
-      <button class="nav-item active" onclick="showPage('overview',this)"><span class="ico">◈</span> Overview</button>
+      <button class="nav-item active" onclick="showPage('planner',this)"><span class="ico">⊞</span> Planner</button>
+      <button class="nav-item" onclick="showPage('overview',this)"><span class="ico">◈</span> Overview</button>
       <button class="nav-item" onclick="showPage('log',this)"><span class="ico">✦</span> Workout Log</button>
       <button class="nav-item" onclick="showPage('volume',this)"><span class="ico">▣</span> Volume Tracker</button>
       <button class="nav-item" onclick="showPage('strength',this)"><span class="ico">▲</span> Strength</button>
       <button class="nav-item" onclick="showPage('recommend',this)"><span class="ico">◉</span> Recommendations</button>
-      <button class="nav-item" onclick="showPage('planner',this)"><span class="ico">⊞</span> Planner</button>
       <button class="nav-item" onclick="showPage('exercises',this)"><span class="ico">⌬</span> Exercises</button>
     </div>
     <div class="nav-section">
@@ -456,7 +518,7 @@ body {
   <main class="main">
 
     <!-- ===== OVERVIEW ===== -->
-    <div class="page active" id="page-overview">
+    <div class="page" id="page-overview">
       <div class="topbar">
         <div class="topbar-left">
           <h1>Overview</h1>
@@ -520,10 +582,6 @@ body {
         <div id="heatmap-container"></div>
       </div>
 
-      <div class="section-heading">Next session suggestion</div>
-      <div class="card" id="next-session-card">
-        <div id="next-session-content"></div>
-      </div>
     </div>
 
     <!-- ===== LOG ===== -->
@@ -655,7 +713,7 @@ body {
     </div>
 
     <!-- ===== PLANNER ===== -->
-    <div class="page" id="page-planner">
+    <div class="page active" id="page-planner">
       <div class="topbar">
         <div class="topbar-left">
           <h1>Workout Planner</h1>
@@ -668,6 +726,8 @@ body {
       </div>
 
       <div id="planner-meso-bar"></div>
+
+      <div id="next-workout-content"></div>
 
       <div class="section-heading">Projected rolling 7-day volume (already-done + planned)</div>
       <div class="card" style="margin-bottom:18px">
@@ -2095,9 +2155,6 @@ function renderOverview() {
   // Heatmap
   renderHeatmap();
 
-  // Next session suggestion
-  renderNextSession(sessions);
-
   // Subtitle
   const sub = document.getElementById('overview-subtitle');
   if (sub) {
@@ -2423,7 +2480,114 @@ function toggleMuscle(key, muscle) {
 
 // ─── RENDER: PLANNER ─────────────────────────────────────────────────────────
 
+function renderNextWorkout() {
+  const el = document.getElementById('next-workout-content');
+  if (!el) return;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const plans = getPlans();
+
+  // Find the next planned workout in the next 7 days that's an actual lifting/plyo session
+  const liftingTypes = new Set(['push','pull','legs','plyo']);
+  let next = null;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const iso = d.toISOString().split('T')[0];
+    const plan = plans.find(p => p.date === iso);
+    if (!plan || plan.templateId === 'none' || plan.templateId === 'rest') continue;
+    const tmpl = resolveTemplate(plan.templateId);
+    if (!tmpl || !liftingTypes.has(tmpl.type)) continue;
+    next = { date: iso, dateObj: d, daysAway: i, template: tmpl, originalTemplateId: plan.templateId };
+    break;
+  }
+
+  if (!next) {
+    el.innerHTML = `<div class="next-workout-card">
+      <div class="nw-empty">
+        <p>No upcoming lifting session in the next 7 days.</p>
+        <button class="btn btn-primary btn-sm" onclick="suggestPlannerWeek()">Auto-fill suggested week</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  // Build header
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const whenLabel = next.daysAway === 0 ? 'Today'
+    : next.daysAway === 1 ? 'Tomorrow'
+    : `In ${next.daysAway} days`;
+  const whenClass = next.daysAway === 0 ? 'today' : next.daysAway === 1 ? 'tomorrow' : '';
+  const dateDisplay = `${dayNames[next.dateObj.getDay()]}, ${next.dateObj.toLocaleDateString('en-US', { month:'short', day:'numeric' })}`;
+
+  const rir = getCurrentRIR();
+  const rirHtml = rir
+    ? (rir.deload
+        ? `<span class="rir-pill deload">DELOAD</span>`
+        : `<span class="rir-pill">${rir.label} RIR</span>`)
+    : '';
+
+  // Volume preview
+  const muscleCounts = {};
+  for (const ex of next.template.exercises) {
+    for (const m of ex.muscles) muscleCounts[m] = (muscleCounts[m] || 0) + ex.sets;
+  }
+  const validEx = next.template.exercises.length;
+  const totalSets = next.template.exercises.reduce((sum, e) => sum + e.sets, 0);
+
+  // Exercise list
+  const exerciseHtml = next.template.exercises.map((ex, idx) => {
+    const last = getLastPerformedExercise(ex.name);
+    const lastHtml = last
+      ? `<div class="nw-ex-last">Last (${formatDateShort(last.date)}): ${formatLastSets(last.sets)}</div>`
+      : `<div class="nw-ex-last empty">No prior log — start at the top of the rep range with ${rir?.deload ? 'easy weight' : '3 RIR'}</div>`;
+    const muscleLabel = ex.muscles.length
+      ? `<span class="nw-ex-muscles">· ${ex.muscles.map(m => RP_VOL[m]?.label || m).join(', ')}</span>`
+      : '';
+    return `<div class="nw-exercise">
+      <div class="nw-ex-top">
+        <span class="nw-ex-num">${idx + 1}.</span>
+        <span class="nw-ex-name">${ex.name}${muscleLabel}</span>
+        <span class="nw-ex-sets">${ex.sets} sets</span>
+      </div>
+      ${lastHtml}
+    </div>`;
+  }).join('');
+
+  const phaseNote = (next.originalTemplateId === 'legs_plyo' || next.originalTemplateId === 'plyo_only')
+    && next.template.id !== next.originalTemplateId
+    ? `<span style="font-size:10px;color:var(--accent4);padding:2px 8px;background:rgba(160,107,255,0.1);border-radius:99px">${next.template.name}</span>`
+    : '';
+
+  const footerPills = Object.entries(muscleCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([m, c]) => `<span class="nw-muscle-pill">${RP_VOL[m]?.label || m} ${c}</span>`)
+    .join('');
+
+  el.innerHTML = `<div class="next-workout-card">
+    <div class="nw-header">
+      <div>
+        <div class="nw-section-label">Next workout</div>
+        <div class="nw-title-row" style="margin-top:4px">
+          <span class="nw-date-line">${next.template.name}</span>
+          <span class="nw-when ${whenClass}">${whenLabel}</span>
+          <span style="font-size:12px;color:var(--text3)">${dateDisplay}</span>
+          ${phaseNote}
+        </div>
+      </div>
+      <div class="nw-stats">
+        ${rirHtml}
+        <span class="pill pill-gray">${validEx} ex · ${totalSets} sets</span>
+      </div>
+    </div>
+    <div class="nw-exercises">${exerciseHtml}</div>
+    ${footerPills ? `<div class="nw-footer">${footerPills}</div>` : ''}
+  </div>`;
+}
+
 function renderPlanner() {
+  renderNextWorkout();
   renderMesoBar('planner-meso-bar');
 
   const container = document.getElementById('planner-days');
@@ -2911,8 +3075,8 @@ document.addEventListener('DOMContentLoaded', () => {
     o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
   });
 
-  // Render initial page
-  renderOverview();
+  // Render initial page (Planner is the default landing tab)
+  renderPlanner();
 });
 </script>
 </body>
