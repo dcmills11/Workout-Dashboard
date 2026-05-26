@@ -939,67 +939,79 @@ const WORKOUT_TEMPLATES = {
   volleyball_hard:  { id:'volleyball_hard',  name:'Volleyball (strenuous)',     type:'vb',      color:'#ff9a7a', exercises:[] },
   run:              { id:'run',              name:'Run',                        type:'run',     color:'#7affb8', exercises:[] },
   push_bench: {
-    id:'push_bench', name:'Push — Bench day (trimmed)', type:'push', color:'#e8ff6b',
+    id:'push_bench', name:'Push A — Bench day', type:'push', color:'#e8ff6b',
     exercises:[
-      { name:'Bench Press 5/3/1',         muscles:['chest','triceps'],   sets:3 },
-      { name:'Incline Cable Fly',         muscles:['chest'],             sets:3 },
-      { name:'Machine Chest Press',       muscles:['chest','triceps'],   sets:3 },
-      { name:'Lateral Cable Raise',       muscles:['shoulders'],         sets:3 },
-      { name:'Overhead Tricep Extension', muscles:['triceps'],           sets:3 },
+      { name:'Bench Press 5/3/1',          muscles:['chest','triceps'],   sets:3 },
+      { name:'Bench Press FSL',            muscles:['chest','triceps'],   sets:3 },
+      { name:'Incline DB Press',           muscles:['chest'],             sets:3 },
+      { name:'Cable Lateral Raise',        muscles:['shoulders'],         sets:3 },
+      { name:'Cable Tricep Pushdown',      muscles:['triceps'],           sets:3 },
+      { name:'Standing Calf Raise (heavy 10-12)', muscles:['calves'],     sets:4 },
+      { name:'Hanging Knee Raise',         muscles:['abs'],               sets:3 },
     ]
   },
   push_ohp: {
-    id:'push_ohp', name:'Push — OHP day', type:'push', color:'#e8ff6b',
+    id:'push_ohp', name:'Push B — OHP day', type:'push', color:'#e8ff6b',
     exercises:[
-      { name:'Overhead Press 4×6–8',      muscles:['shoulders','triceps'], sets:4 },
-      { name:'Close Grip Bench Press',    muscles:['chest','triceps'],     sets:3 },
-      { name:'Incline DB Fly',            muscles:['chest'],               sets:3 },
-      { name:'Rope Upright Row',          muscles:['shoulders'],           sets:3 },
-      { name:'Band Lat Raises',           muscles:['shoulders'],           sets:3 },
+      { name:'Overhead Press 5/3/1 (4x6-8)', muscles:['shoulders','triceps'], sets:4 },
+      { name:'Close Grip Bench Press (6-8)', muscles:['chest','triceps'],     sets:3 },
+      { name:'Incline DB Fly',              muscles:['chest'],               sets:3 },
+      { name:'Machine Lateral Raise',       muscles:['shoulders'],           sets:3 },
+      { name:'Overhead Cable Tricep Extension', muscles:['triceps'],         sets:3 },
+      { name:'Hammer Curl',                 muscles:['biceps'],              sets:3 },
+      { name:'Standing Calf Raise',         muscles:['calves'],              sets:3 },
     ]
   },
   pull_back: {
-    id:'pull_back', name:'Pull — Back focused', type:'pull', color:'#6bffd5',
+    id:'pull_back', name:'Pull A — Back focused', type:'pull', color:'#6bffd5',
     exercises:[
-      { name:'Eccentric Lat Pulldown',    muscles:['back'],     sets:3 },
-      { name:'T-Bar Row',                 muscles:['back'],     sets:3 },
-      { name:'Single Arm Cable Row',      muscles:['back'],     sets:3 },
-      { name:'Kneeling Cable Pullover',   muscles:['back'],     sets:3 },
-      { name:'Reverse Pec Deck',          muscles:['reardelts'],sets:3 },
-      { name:'Incline DB Curl',           muscles:['biceps'],   sets:3 },
+      { name:'Weighted Pull-Up',            muscles:['back','biceps'],     sets:3 },
+      { name:'T-Bar Row (horizontal heavy)', muscles:['back'],             sets:3 },
+      { name:'Single Arm Cable Row',        muscles:['back'],              sets:3 },
+      { name:'Lat Pulldown (close neutral)', muscles:['back'],             sets:3 },
+      { name:'Kneeling Cable Pullover',     muscles:['back'],              sets:2 },
+      { name:'Cable Face Pull',             muscles:['reardelts'],         sets:3 },
+      { name:'Reverse Pec Deck',            muscles:['reardelts'],         sets:3 },
+      { name:'Incline DB Curl',             muscles:['biceps'],            sets:3 },
+      { name:'EZ Bar Curl',                 muscles:['biceps'],            sets:3 },
+      { name:'Cable Crunch',                muscles:['abs'],               sets:3 },
     ]
   },
   pull_deadlift: {
-    id:'pull_deadlift', name:'Pull — Deadlift day', type:'pull', color:'#6bffd5',
+    id:'pull_deadlift', name:'Pull B — Deadlift day', type:'pull', color:'#6bffd5',
     exercises:[
-      { name:'Deadlift 5/3/1',            muscles:['back','hamstrings'], sets:3 },
-      { name:'Overhand Pull-ups',         muscles:['back','biceps'],     sets:3 },
-      { name:'Meadow Rows',               muscles:['back'],              sets:3 },
-      { name:'Face Pulls',                muscles:['reardelts'],         sets:3 },
-      { name:'EZ Bar Curls',              muscles:['biceps'],            sets:3 },
+      { name:'Deadlift 5/3/1',              muscles:['back','hamstrings'], sets:3 },
+      { name:'Deadlift FSL',                muscles:['back','hamstrings'], sets:2 },
+      { name:'Weighted Pull-Up',            muscles:['back','biceps'],     sets:3 },
+      { name:'Meadow Row',                  muscles:['back'],              sets:3 },
+      { name:'Cable Face Pull',             muscles:['reardelts'],         sets:3 },
+      { name:'Hammer Curl',                 muscles:['biceps'],            sets:3 },
+      { name:'Hanging Leg Raise',           muscles:['abs'],               sets:3 },
     ]
   },
   legs: {
-    id:'legs', name:'Legs — Strength + Vertical', type:'legs', color:'#a06bff',
+    id:'legs', name:'Legs — Strength + Hypertrophy', type:'legs', color:'#a06bff',
     exercises:[
       { name:'Squat 5/3/1',                 muscles:['quads','glutes'],            sets:3 },
-      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
       { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'],       sets:3 },
+      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
+      { name:'Leg Extension',               muscles:['quads'],                     sets:3 },
       { name:'Seated Leg Curl',             muscles:['hamstrings'],                sets:3 },
       { name:'Hip Thrust',                  muscles:['glutes'],                    sets:3 },
-      { name:'Standing Calf Raise',         muscles:['calves'],                    sets:4 },
+      { name:'Standing Calf Raise (15-20)', muscles:['calves'],                    sets:4 },
     ]
   },
   legs_plyo: {
-    id:'legs_plyo', name:'Legs + Plyometrics', type:'legs', color:'#a06bff',
+    id:'legs_plyo', name:'Legs + Plyo (Squat day)', type:'legs', color:'#a06bff',
     exercises:[
       { name:'Box Jumps (plyo)',            muscles:[],                            sets:4 },
-      { name:'Broad Jumps (plyo)',          muscles:[],                            sets:3 },
       { name:'Squat 5/3/1',                 muscles:['quads','glutes'],            sets:3 },
+      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'],       sets:3 },
       { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
-      { name:'Hip Thrust',                  muscles:['glutes'],                    sets:3 },
+      { name:'Leg Extension',               muscles:['quads'],                     sets:3 },
       { name:'Seated Leg Curl',             muscles:['hamstrings'],                sets:3 },
-      { name:'Standing Calf Raise (explosive)', muscles:['calves'],                sets:3 },
+      { name:'Hip Thrust',                  muscles:['glutes'],                    sets:3 },
+      { name:'Standing Calf Raise (15-20)', muscles:['calves'],                    sets:4 },
     ]
   },
   plyo_only: {
@@ -1091,14 +1103,52 @@ function clearPlan() {
 }
 
 function suggestPlannerWeek() {
-  // Suggest a week based on user's volleyball + running schedule
-  // Mon: light VB + push, Tue: hard VB, Wed: legs+plyo, Thu: light VB, Fri: pull, Sat: push+run, Sun: rest
+  // Suggested 4-day routine + 3x volleyball:
+  //   Mon push_bench, Tue VB hard, Wed legs_plyo, Thu VB light, Fri pull_back,
+  //   Sat alternates push_ohp ↔ pull_deadlift week-to-week, Sun rest
   const data = loadData();
   if (!data.plan) data.plan = [];
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const map = { 1: 'push_bench', 2: 'volleyball_hard', 3: 'legs_plyo', 4: 'volleyball_light', 5: 'pull_back', 6: 'push_ohp', 0: 'rest' };
+
+  // Decide which Saturday template to use this week.
+  // If the most recent Saturday workout (actual or planned) was push_ohp, suggest pull_deadlift, and vice versa.
+  // Default to push_ohp.
+  let lastSatTemplate = null;
+  const lookback = new Date(today); lookback.setDate(today.getDate() - 14);
+  // Check planned sessions first (more recent intent)
+  const recentPlans = (data.plan || [])
+    .filter(p => new Date(p.date + 'T12:00:00') < today && new Date(p.date + 'T12:00:00') >= lookback)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  for (const p of recentPlans) {
+    if (p.templateId === 'push_ohp' || p.templateId === 'pull_deadlift') {
+      lastSatTemplate = p.templateId;
+      break;
+    }
+  }
+  // Fall back to actual sessions
+  if (!lastSatTemplate) {
+    for (const s of getSessions()) {
+      if (new Date(s.date + 'T12:00:00') < lookback) break;
+      // Look for OHP or Deadlift as the main lift of the session
+      const hasOHP = s.exercises.some(e => /overhead press|^ohp/i.test(e.name));
+      const hasDL = s.exercises.some(e => /deadlift/i.test(e.name) && !e.isSkipped);
+      if (hasDL) { lastSatTemplate = 'pull_deadlift'; break; }
+      if (hasOHP) { lastSatTemplate = 'push_ohp'; break; }
+    }
+  }
+  const nextSat = lastSatTemplate === 'push_ohp' ? 'pull_deadlift' : 'push_ohp';
+
+  const map = {
+    1: 'push_bench',       // Mon
+    2: 'volleyball_hard',  // Tue
+    3: 'legs_plyo',        // Wed
+    4: 'volleyball_light', // Thu
+    5: 'pull_back',        // Fri
+    6: nextSat,            // Sat (alternates)
+    0: 'rest'              // Sun
+  };
 
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
@@ -1112,7 +1162,7 @@ function suggestPlannerWeek() {
   }
   saveData(data);
   renderPlanner();
-  showToast('Suggested week applied');
+  showToast(`Suggested week applied (Sat = ${nextSat === 'pull_deadlift' ? 'Deadlift' : 'OHP'})`);
 }
 
 function addSessions(newSessions) {
