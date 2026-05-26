@@ -1851,12 +1851,16 @@ function renderHeatmap() {
   }
 
   // Month labels — one slot per week, label text only on the first week of each month
+  // Include 2-digit year if the heatmap window spans multiple calendar years
+  const heatmapYears = new Set(weeks.map(w => w.start.getFullYear())).size;
+  const showYear = heatmapYears > 1;
   let monthLabelsHtml = '';
   let lastMonth = -1;
   for (const w of weeks) {
     const m = w.start.getMonth();
     if (m !== lastMonth) {
-      monthLabelsHtml += `<div class="heatmap-month-label">${w.start.toLocaleDateString('en-US',{month:'short'})}</div>`;
+      const lblOpts = showYear ? { month:'short', year:'2-digit' } : { month:'short' };
+      monthLabelsHtml += `<div class="heatmap-month-label">${w.start.toLocaleDateString('en-US', lblOpts)}</div>`;
       lastMonth = m;
     } else {
       monthLabelsHtml += `<div class="heatmap-month-label"></div>`;
@@ -1947,14 +1951,15 @@ function renderStrengthChart() {
     <line x1="${PAD.left}" y1="${y}" x2="${PAD.left + iW}" y2="${y}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>`;
   }
 
-  // X axis labels (every Nth)
+  // X axis labels (every Nth) — include year if data spans multiple years
+  const yearsSpanned = new Set(history.map(h => h.date.slice(0, 4))).size;
+  const multiYear = yearsSpanned > 1;
   let xLabels = '';
   const step = Math.max(1, Math.floor(n / 6));
   history.forEach((h, i) => {
     if (i % step === 0 || i === n - 1) {
       const x = sx(i);
-      const d = new Date(h.date + 'T12:00:00');
-      const lbl = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+      const lbl = formatDateCompact(h.date, multiYear);
       xLabels += `<text x="${x}" y="${PAD.top + iH + 14}" text-anchor="middle" class="chart-label">${lbl}</text>`;
     }
   });
@@ -2837,15 +2842,16 @@ function renderBodyComp() {
     const min = Math.min(...display.map(b => b.weight)) - 2;
     const max = Math.max(...display.map(b => b.weight)) + 1;
     const H = 90;
+    const yearsSpanned = new Set(display.map(b => b.date.slice(0, 4))).size;
+    const multiYear = yearsSpanned > 1;
     wrap.innerHTML = `<div class="bw-chart-area" style="height:${H+28}px;align-items:flex-end">
       ${display.map((b, i) => {
         const h = Math.max(4, ((b.weight - min) / (max - min)) * H);
         const isLast = i === display.length - 1;
-        const d = new Date(b.date + 'T12:00:00');
         return `<div class="bw-col">
           <div class="bw-val">${b.weight}</div>
           <div class="bw-bar ${isLast ? 'latest' : ''}" style="height:${h}px"></div>
-          <div class="bw-lbl">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+          <div class="bw-lbl">${formatDateCompact(b.date, multiYear)}</div>
         </div>`;
       }).join('')}
     </div>`;
@@ -3118,7 +3124,19 @@ function showToast(msg, isError = false) {
 
 function formatDateShort(str) {
   const d = new Date(str + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+  const currentYear = new Date().getFullYear();
+  const opts = { weekday:'short', month:'short', day:'numeric' };
+  if (d.getFullYear() !== currentYear) opts.year = 'numeric';
+  return d.toLocaleDateString('en-US', opts);
+}
+
+// Compact variant (no weekday) — for chart axes, BW chart labels, etc.
+function formatDateCompact(str, forceYear = false) {
+  const d = new Date(str + 'T12:00:00');
+  const currentYear = new Date().getFullYear();
+  const opts = { month:'short', day:'numeric' };
+  if (forceYear || d.getFullYear() !== currentYear) opts.year = '2-digit';
+  return d.toLocaleDateString('en-US', opts);
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
