@@ -193,15 +193,29 @@ body {
 .heatmap-month-labels { display: flex; gap: 3px; margin-bottom: 4px; }
 .heatmap-month-label { flex: 1; max-width: 28px; min-width: 0; font-size: 10px; color: var(--text3); white-space: nowrap; overflow: visible; }
 
-/* RECOMMENDATIONS */
-.rec-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--rad); padding: 14px 16px; margin-bottom: 10px; }
-.rec-card:last-child { margin-bottom: 0; }
-.rec-card.priority { border-color: rgba(232,255,107,0.3); }
-.rec-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; gap: 8px; }
-.rec-name { font-size: 14px; font-weight: 500; }
-.rec-body { font-size: 12px; color: var(--text2); line-height: 1.5; }
-.rec-tags { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
-.rec-why { font-size: 11px; color: var(--accent); margin-top: 6px; }
+/* RECOMMENDATIONS — NEW STYLE */
+.rec-workout-card { padding: 18px 20px; }
+.rec-workout-summary {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.7;
+  padding: 10px 12px;
+  background: var(--surface2);
+  border-radius: var(--rad);
+  margin-bottom: 14px;
+}
+.rec-exercises-list { display: flex; flex-direction: column; gap: 10px; }
+.rec-exercise {
+  padding: 10px 12px;
+  background: var(--surface2);
+  border-radius: var(--rad);
+  border-left: 2px solid var(--border2);
+}
+.rec-ex-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.rec-ex-name { font-size: 14px; font-weight: 500; }
+.rec-ex-sets { font-family: 'Syne', sans-serif; font-weight: 700; color: var(--accent); font-size: 12px; letter-spacing: 0.04em; }
+.rec-ex-muscles { font-size: 11px; color: var(--text3); margin-top: 3px; }
+.rec-ex-why { font-size: 12px; color: var(--text2); margin-top: 6px; line-height: 1.6; padding-top: 6px; border-top: 1px dashed var(--border); }
 
 /* MODAL */
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
@@ -805,15 +819,9 @@ body {
     <div class="page" id="page-recommend">
       <div class="topbar">
         <div class="topbar-left">
-          <h1>Exercise Recommendations</h1>
-          <p>Based on your goals and rolling 7-day volume gaps</p>
+          <h1>Recommended Workout Plan</h1>
+          <p>RP-derived hypertrophy routine, tailored to your schedule</p>
         </div>
-      </div>
-      <div class="tabs" id="rec-tabs">
-        <button class="tab active" onclick="showRec('push',this)">Push</button>
-        <button class="tab" onclick="showRec('pull',this)">Pull</button>
-        <button class="tab" onclick="showRec('legs',this)">Legs</button>
-        <button class="tab" onclick="showRec('athletic',this)">Athletic</button>
       </div>
       <div id="rec-content"></div>
     </div>
@@ -2436,55 +2444,242 @@ function formatSetsDisplay(ex) {
 
 // ─── RENDER: RECOMMENDATIONS ─────────────────────────────────────────────────
 
-let currentRec = 'push';
+// Per-exercise and per-workout rationale, keyed off WORKOUT_TEMPLATES entries
+const REC_WORKOUTS = [
+  { templateId: 'push_bench',    accent: 'var(--accent)',  summary: 'Heavy bench focus with chest hypertrophy work, side delts in moderate range, and tricep isolation. ~16 working sets, 60-75 min.' },
+  { templateId: 'legs_plyo',     accent: 'var(--accent4)', summary: 'Vertical-jump plyometrics first (CNS fresh), then heavy squat + hip-hinge + lunge + isolation + calves. Plyos auto-progress with your meso phase.' },
+  { templateId: 'pull_back',     accent: 'var(--accent3)', summary: '50/50 horizontal vs vertical pulling (RP back article emphasis), rear delts in two ranges, biceps direct work — back work alone is not enough for biceps per RP.' },
+  { templateId: 'push_ohp',      accent: 'var(--accent)',  summary: 'Heavy OHP main lift, heavy compound tricep work (Close-Grip Bench) — RP triceps article wants ~50% heavy distribution. Bonus bicep frequency hit.' },
+  { templateId: 'pull_deadlift', accent: 'var(--accent3)', summary: 'Heavy deadlift main lift, then pulled back / glute / hamstring volume from the DL itself. Shorter session — DL is taxing.' },
+];
 
-function renderRecs(type) {
+const EXERCISE_RATIONALE = {
+  // Push A
+  'Bench Press 5/3/1':              'Primary chest/tricep strength lift. RP chest article wants compound presses in the 8-12 range; 5/3/1 last-set AMRAP fits. Progress TM +5 lb each cycle.',
+  'Bench Press FSL':                'First-Set-Last: same load as your 5/3/1 first set, 5-10 reps. Adds heavy chest volume without re-loading the bar.',
+  'Incline DB Press':               'Upper chest emphasis. RP chest article requires both flat AND incline pressing weekly. 8-12 moderate range.',
+  'Cable Lateral Raise':            'Side delt moderate range. RP side delt article wants ~50% of weekly side delt volume in the 10-20 zone. Cable holds tension at the top of the rep where DBs drop off.',
+  'Cable Tricep Pushdown':          'Tricep moderate isolation. Most of your heavy tricep stimulus comes from bench/FSL/CG bench, so this is the "feeder" volume.',
+  'Standing Calf Raise':            'Calves heavy range (10-12). RP calves article wants 25% heavy / 50% mod / 25% light spread across 3+ sessions per week.',
+  'Hanging Knee Raise':             'Ab session #1 of the week. RP abs MAV is 4-12 sets/wk; this + Pull A crunches keeps you in MAV.',
+  // Push B
+  'Overhead Press 5/3/1':           'Heavy vertical pressing 5/3/1, 4×6-8 last-set range. Hits all three delt heads + triceps.',
+  'Close Grip Bench Press':         'Heavy compound tricep work in the 6-8 zone. RP triceps article specifically calls out the 5-10 range as ~50% of weekly tricep volume — most lifters underdo this.',
+  'Incline DB Fly':                 'Chest stretch-focused isolation. RP chest article: "flyes are essential, don\'t rely solely on pressing."',
+  'Machine Lateral Raise':          'Side delts moderate range from a different angle than Push A\'s cables. RP wants 2-5 different side delt exercises across the week.',
+  'Overhead Cable Tricep Extension': 'Long-head tricep stretch position. RP article: "triceps looooove the stretch."',
+  'Hammer Curl':                    'Bonus bicep frequency hit (brachialis emphasis). RP biceps article: 3-6 sessions/week. With Pull A giving 2 hits, this is hit #3.',
+  // Pull A
+  'Weighted Pull-Up':               'Vertical pulling heavy (6-10). RP back article: best back movement, but balance with horizontal pulling.',
+  'T-Bar Row':                      'Horizontal pulling heavy (8-10). RP back article requires roughly 50/50 H vs V pulling weekly.',
+  'Single Arm Cable Row':           'Horizontal moderate range. Unilateral, low spinal load.',
+  'Lat Pulldown (close neutral)':   'Vertical moderate range. Vary grip across mesos for exercise rotation.',
+  'Kneeling Cable Pullover':        'Lat stretch finisher, 12-15 reps. RP back article: prioritize deep stretch over peak contraction.',
+  'Cable Face Pull':                'Rear delt primary movement per RP rear delt article. 15-20 light range, every pull session.',
+  'Reverse Pec Deck':               'Second rear delt angle. RP wants 1-2 rear delt movements per session, 2-5 different across the week.',
+  'Incline DB Curl':                'Bicep stretch position — RP biceps article highlights stretched-position curls.',
+  'EZ Bar Curl':                    'Full ROM basic from RP\'s 5 category framework. Heavy/moderate range work.',
+  'Cable Crunch':                   'Loaded crunch — RP abs article: add weight to stay in target rep ranges. Ab session #2.',
+  // Pull B
+  'Deadlift 5/3/1':                 'Posterior chain heavy compound — counts toward back AND hamstrings volume.',
+  'Deadlift FSL':                   'First-set-last protocol, 2-3 sets at the 5/3/1 first-set weight. Drop sets if energy is low — quality over quantity.',
+  'Meadow Row':                     'Wide-stance single-arm row. Great lat sweep with less lower-back fatigue than barbell rows after a heavy DL.',
+  'Hanging Leg Raise':              'Ab session #3 for the alternating week. Heavy 8-12 range.',
+  // Legs + Plyo (resolved variants)
+  'Box Jumps (plyo)':               'Generic vertical jump training — auto-resolves to Foundation/Power/Reactive variant based on your meso week.',
+  'Pogo Jumps (plyo)':              'Ankle stiffness for jumping. Foundation phase only.',
+  'Box Jumps 12-18" (plyo)':        'Foundation-phase plyo. Build patterns at submaximal heights, 3×3, max effort.',
+  'Broad Jumps (plyo)':             'Horizontal jump power — transfers to acceleration. 3×4, full reset between reps.',
+  'Box Jumps 24" (plyo)':           'Power-phase plyo. Heavier load on the stretch-shortening cycle, 4×3.',
+  'Single-Leg Bounds (plyo)':       'Unilateral jump power. 2×6 per leg.',
+  'Depth Jumps 12" (plyo)':         'Reactive-phase: step off box, absorb-and-immediately-explode jump. 3×3.',
+  'Max Box Jumps (plyo)':           'Reactive-phase max-height jumps. 4×2 — strict 2 reps only to keep CNS focus.',
+  'Hurdle Hops (plyo)':             'Reactive-phase continuous-contact bounds over hurdles. 3×5.',
+  'Squat 5/3/1':                    'Primary quad/glute strength lift. Heavy 5-10 zone per RP quad article.',
+  'Romanian Deadlift':              'Hip-hinge hamstring work — REQUIRED weekly per RP hamstring article (need both hip hinge AND knee flexion). 8-10 moderate range.',
+  'Bulgarian Split Squat':          'Unilateral quad/glute/hamstring movement. Best single-leg builder for vertical-jump carryover.',
+  'Leg Extension':                  'Quad moderate isolation 12-15. RP quad article: extensions belong in 10-20 and 20-30 ranges.',
+  'Seated Leg Curl':                'Knee-flexion hamstring work — REQUIRED weekly per RP. Seated > lying for hamstring stretch.',
+  'Hip Thrust':                     'Best glute builder per RP glute article. Works at all rep ranges, moderate optimal. Direct carryover to sprinting & vertical jump.',
+};
+
+function renderRecs() {
   const el = document.getElementById('rec-content');
   if (!el) return;
-  currentRec = type;
 
-  const vol = getRollingVolume(7);
-  const sessions = getSessions();
-  const recentNames = new Set(
-    sessions.slice(0, 3).flatMap(s => s.exercises.map(e => e.name.toLowerCase()))
-  );
+  const meso = getMesocycle();
+  const week = getCurrentMesoWeek();
+  const rir = getCurrentRIR();
+  const phase = week ? getPlyoPhaseForWeek(week, meso?.totalWeeks) : null;
+  const mesoInfo = week
+    ? `Currently <strong style="color:var(--accent)">Week ${week}</strong> of ${meso.totalWeeks || 6} · target <strong style="color:var(--accent3)">${rir.deload ? 'DELOAD' : rir.label + ' RIR'}</strong> · plyo phase: <strong style="color:var(--accent4)">${phase ? phase.charAt(0).toUpperCase()+phase.slice(1) : 'none (deload)'}</strong>`
+    : `Set up your mesocycle on the Planner or Overview to see current week targets.`;
 
-  const recs = RECS[type] || [];
-
-  const underservedMuscles = new Set();
-  for (const [m, d] of Object.entries(RP_VOL)) {
-    if ((vol[m] || 0) < d.mev) underservedMuscles.add(m);
-  }
-
-  const noteHtml = type === 'athletic'
-    ? `<div style="margin-bottom:16px;padding:12px 16px;background:var(--surface2);border-radius:var(--rad);border:1px solid var(--border);font-size:12px;color:var(--text2);line-height:1.6;">
-        <strong style="color:var(--accent4)">Athletic goal note:</strong> Perform power/jump work at the START of a session when CNS is fresh. Keep plyometric volume low — 3–5 sets max. These are separate from your strength sets for volume tracking.
-      </div>`
-    : `<div style="margin-bottom:16px;padding:12px 16px;background:var(--surface2);border-radius:var(--rad);border:1px solid var(--border);font-size:12px;color:var(--text2);line-height:1.6;">
-        <strong style="color:var(--accent)">Your goals:</strong> Fat loss + hypertrophy + vertical jump. Prioritize <strong style="color:var(--accent3)">high SFR exercises</strong> on cut. Keep RPE 7–9. Volume at low-mid MAV. Below-MEV muscles are flagged.
+  // Renders one workout card from the template + rationale lookup
+  const renderWorkout = (item) => {
+    const tmpl = WORKOUT_TEMPLATES[item.templateId];
+    if (!tmpl) return '';
+    const exHtml = tmpl.exercises.map(ex => {
+      const rationale = EXERCISE_RATIONALE[ex.name];
+      const muscleLabel = ex.muscles.length ? ex.muscles.map(m => RP_VOL[m]?.label || m).join(', ') : 'plyo (no direct volume)';
+      const setsReps = ex.reps ? `${ex.sets} × ${ex.reps}` : `${ex.sets} sets`;
+      return `<div class="rec-exercise">
+        <div class="rec-ex-top">
+          <span class="rec-ex-name">${ex.name}</span>
+          <span class="rec-ex-sets">${setsReps}</span>
+        </div>
+        <div class="rec-ex-muscles">· ${muscleLabel}</div>
+        ${rationale ? `<div class="rec-ex-why">${rationale}</div>` : ''}
       </div>`;
-
-  el.innerHTML = noteHtml + recs.map(rec => {
-    const needsMuscle = rec.muscles.some(m => underservedMuscles.has(m));
-    const wasDoneRecently = rec.muscles.some(m => recentNames.has(rec.name.toLowerCase().slice(0, 8)));
-    const isPriority = needsMuscle;
-
-    const whyHtml = needsMuscle
-      ? `<div class="rec-why">⚡ Priority — ${rec.muscles.filter(m => underservedMuscles.has(m)).map(m => RP_VOL[m]?.label || m).join(', ')} is below MEV</div>`
-      : rec.sfrNote
-      ? `<div style="font-size:11px;color:var(--accent3);margin-top:6px;">${rec.sfrNote}</div>`
-      : '';
-
-    return `<div class="rec-card ${isPriority ? 'priority' : ''}">
-      <div class="rec-header">
-        <span class="rec-name">${rec.name}</span>
-        <span class="pill pill-purple">RPE ${rec.rpe}</span>
+    }).join('');
+    return `<div class="card rec-workout-card" style="border-left:3px solid ${item.accent};margin-bottom:14px">
+      <div class="card-header">
+        <div class="card-title" style="color:${item.accent}">${tmpl.name}</div>
+        <span class="pill pill-gray">${tmpl.exercises.length} exercises</span>
       </div>
-      <div class="rec-body">${rec.note}</div>
-      ${whyHtml}
-      <div class="rec-tags">${rec.muscles.map(m => `<span class="pill ${underservedMuscles.has(m) ? 'pill-red' : 'pill-gray'}">${RP_VOL[m]?.label || m}</span>`).join('')}</div>
+      <p class="rec-workout-summary">${item.summary}</p>
+      <div class="rec-exercises-list">${exHtml}</div>
     </div>`;
-  }).join('');
+  };
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-header"><div class="card-title">Goals + Context</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <span class="pill pill-green">Fat loss</span>
+        <span class="pill pill-teal">Hypertrophy</span>
+        <span class="pill pill-purple">Vertical jump</span>
+        <span class="pill pill-gray">Running fitness</span>
+      </div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.7">
+        4 lifting sessions per week · 3× volleyball (Mon light, Tue hard, Thu light) · 1–2 runs · plyometric block fused into legs day.
+        Volume targets sit at <strong style="color:var(--text)">low-to-mid MAV</strong> — pushing toward MRV is unwise while stacking volleyball CNS load and a fat-loss caloric deficit.
+      </div>
+      <div style="margin-top:14px;padding:10px 14px;background:var(--surface2);border-radius:var(--rad);font-size:12px;color:var(--text2);line-height:1.6">${mesoInfo}</div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px">
+      <div class="card-header"><div class="card-title">Weekly schedule</div></div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:8px;width:64px;font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:0.08em">Day</th>
+            <th style="text-align:left;padding:8px;font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:0.08em">Session</th>
+            <th style="text-align:left;padding:8px;font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:0.08em">Why this slot</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Mon</td><td style="padding:10px 8px"><span class="day-tag" style="color:var(--accent);font-size:12px">PUSH A</span> · Bench day</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Light VB day — fresh enough to bench heavy</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Tue</td><td style="padding:10px 8px;color:var(--text2)"><span style="color:#ff9a7a;font-size:11px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:0.08em">VOLLEYBALL</span> (hard) — no lift</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Hardest VB day — leg work would compound badly</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Wed</td><td style="padding:10px 8px"><span class="day-tag" style="color:var(--accent4);font-size:12px">LEGS + PLYO</span></td><td style="padding:10px 8px;color:var(--text2);font-size:12px">48h after hard VB and 48h before light VB — best CNS-fresh slot for legs &amp; plyo</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Thu</td><td style="padding:10px 8px;color:var(--text2)"><span style="color:#7ab8ff;font-size:11px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:0.08em">VOLLEYBALL</span> (light) — no lift</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Light VB acts as active recovery from Wed legs</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Fri</td><td style="padding:10px 8px"><span class="day-tag" style="color:var(--accent3);font-size:12px">PULL A</span> · Back focused</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Upper body — back/biceps fresh from Thu rest</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Sat</td><td style="padding:10px 8px"><span style="color:var(--accent);font-size:11px">Week A:</span> <span class="day-tag" style="color:var(--accent);font-size:12px">PUSH B</span> (OHP) <span style="color:var(--text3);margin:0 6px">|</span> <span style="color:var(--accent3);font-size:11px">Week B:</span> <span class="day-tag" style="color:var(--accent3);font-size:12px">PULL B</span> (Deadlift)</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Alternates weekly so each main lift gets its own day on a 2-week rotation</td></tr>
+          <tr><td style="padding:10px 8px;font-weight:600">Sun</td><td style="padding:10px 8px;color:var(--text2)">Rest or easy run</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Full recovery before Mon's bench session</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-heading">Lifting sessions — exercise details &amp; rationale</div>
+    ${REC_WORKOUTS.map(renderWorkout).join('')}
+
+    <div class="section-heading" style="margin-top:32px">Mesocycle progression — 6-week RIR ramp</div>
+    <div class="card" style="margin-bottom:14px">
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px">All RP per-muscle articles converge on the same intra-meso loading scheme: start submaximal, push reps closer to failure each week, deload at the end. Add weight as RIR drops to keep reps stable.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:8px;font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:0.08em">Week</th>
+            <th style="text-align:left;padding:8px;font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:0.08em">Target RIR</th>
+            <th style="text-align:left;padding:8px;font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:0.08em">Approach</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px;font-weight:600">1</td><td style="padding:8px;color:var(--accent3)">3–4 RIR</td><td style="padding:8px;color:var(--text2)">Submaximal — establish loads, learn movements</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px;font-weight:600">2</td><td style="padding:8px;color:var(--accent3)">2–3 RIR</td><td style="padding:8px;color:var(--text2)">Add weight or reps vs. last week</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px;font-weight:600">3</td><td style="padding:8px;color:var(--accent3)">2 RIR</td><td style="padding:8px;color:var(--text2)">Add weight or reps</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px;font-weight:600">4</td><td style="padding:8px;color:var(--accent3)">1 RIR</td><td style="padding:8px;color:var(--text2)">Push close to failure</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px;font-weight:600">5</td><td style="padding:8px;color:var(--accent3)">0–1 RIR</td><td style="padding:8px;color:var(--text2)">All-out except 5/3/1 main lifts</td></tr>
+          <tr><td style="padding:8px;font-weight:600">6</td><td style="padding:8px;color:var(--accent)">DELOAD</td><td style="padding:8px;color:var(--text2)">50% sets · 50% reps · 50% load · drop FSL · drop plyos</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:14px;padding:10px 14px;background:var(--surface2);border-radius:var(--rad);font-size:12px;color:var(--text2)">After deload, start a new mesocycle with TM +5 (upper) / +10 (lower) on 5/3/1 lifts.</div>
+    </div>
+
+    <div class="section-heading">Plyometric block — 6-week vertical jump ramp</div>
+    <div class="grid g-3" style="margin-bottom:14px">
+      <div class="card">
+        <div class="card-header"><div class="card-title" style="color:var(--accent3)">Weeks 1–2 · Foundation</div></div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.8">
+          <strong style="color:var(--text)">Pogo Jumps</strong> 2×10<br>
+          <strong style="color:var(--text)">Box Jumps 12–18"</strong> 3×3<br>
+          <strong style="color:var(--text)">Broad Jumps</strong> 3×4<br>
+          <span style="color:var(--text3);font-size:11px">~40 contacts · build patterns at submaximal heights</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title" style="color:var(--accent)">Weeks 3–4 · Power</div></div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.8">
+          <strong style="color:var(--text)">Box Jumps 24"</strong> 4×3<br>
+          <strong style="color:var(--text)">Broad Jumps</strong> 3×4<br>
+          <strong style="color:var(--text)">Single-leg Bounds</strong> 2×6/leg<br>
+          <span style="color:var(--text3);font-size:11px">~50 contacts · max intent each rep</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title" style="color:var(--accent2)">Weeks 5–6 · Reactive</div></div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.8">
+          <strong style="color:var(--text)">Depth Jumps 12"</strong> 3×3<br>
+          <strong style="color:var(--text)">Max Box Jumps</strong> 4×2<br>
+          <strong style="color:var(--text)">Hurdle Hops</strong> 3×5<br>
+          <span style="color:var(--text3);font-size:11px">~45 contacts · stretch-shortening cycle</span>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="background:rgba(232,255,107,0.04);border-color:rgba(232,255,107,0.15);margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2);line-height:1.7">
+        <strong style="color:var(--accent)">Programming rules:</strong> Plyos FIRST in the session when CNS is fresh · 90–120s rest between sets · max effort each rep, NOT a metcon · 1 plyo session per week (Tuesday volleyball already provides reactive load) · step off boxes, never jump down · stop the set if reps slow down.
+      </div>
+    </div>
+
+    <div class="section-heading">Why this routine works for YOUR context</div>
+    <div class="card" style="margin-bottom:14px">
+      <ul style="list-style:none;padding:0;font-size:13px;color:var(--text2);line-height:1.8">
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Leg day is Wednesday</strong> — sits with 48h on either side of volleyball. Heavy squats Tuesday would compound with strenuous VB; doing them Thursday would torch you for Thu light VB.</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Plyos before squats</strong> — RP and every plyo source agrees: maximum-intent jump work must happen when CNS is fresh. After 6 sets of squats, your jumps are garbage.</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Volleyball IS leg + jump training</strong> — Tuesday strenuous VB gives you sport-specific reactive work, so programmed plyos stay capped at 1 session/week (foundation 40 contacts → reactive 45). More would be counterproductive.</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Biceps appear 3× per week</strong> — RP biceps article says 3–6 sessions/week and that back work alone isn\'t enough. Pull A has 2 bicep exercises, Push B / Pull B has hammer curls — 3 hits/week minimum.</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Calves appear on 3 days</strong> — RP calves article: 3–6 sessions/week. Heavy 10-12 on Push A, mod 12-15 on Push B, light 15-20 on Legs day. Distributes the 25/50/25 heavy/mod/light split RP wants.</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Tricep volume is bench-heavy on purpose</strong> — RP triceps wants 50% heavy work, and most lifters bias toward isolation. Bench 5/3/1 + Bench FSL + CG Bench is your heavy stimulus; the cable pushdown/overhead extension just adds stretch volume.</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Saturday alternates Push B vs Pull B</strong> — gives each 5/3/1 main lift its own dedicated day on a 2-week rotation, so OHP and Deadlift each get a session that\'s not crammed.</li>
+        <li style="padding:6px 0"><strong style="color:var(--text)">Hamstring volume is low on purpose</strong> — RP hamstring MAV is just 2–8 sets/wk (much lower than other muscles). RDL (3) + Leg Curl (3) = 6 sets, dead-center MAV. Adding more would be wasted fatigue.</li>
+      </ul>
+    </div>
+
+    <div class="section-heading">RP volume targets — quick reference</div>
+    <div class="card">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:8px;font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:0.08em">Muscle</th>
+            <th style="text-align:center;padding:8px;font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:0.08em">MEV</th>
+            <th style="text-align:center;padding:8px;font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:0.08em">MAV (target)</th>
+            <th style="text-align:center;padding:8px;font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:0.08em">MRV</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${Object.entries(RP_VOL).map(([k, d]) => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:8px 8px;font-weight:500">${d.label}</td>
+              <td style="padding:8px 8px;text-align:center;color:var(--text2)">${d.mev}</td>
+              <td style="padding:8px 8px;text-align:center;color:var(--accent3)">${d.mavLo}–${d.mavHi}</td>
+              <td style="padding:8px 8px;text-align:center;color:var(--accent2)">${d.mrv}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:14px;padding:10px 14px;background:var(--surface2);border-radius:var(--rad);font-size:11px;color:var(--text3);line-height:1.6">Source: RP per-muscle hypertrophy guides at rpstrength.com. Numbers are for intermediate lifters (3–7 yrs training).</div>
+    </div>
+  `;
 }
 
 // ─── RENDER: OVERVIEW ────────────────────────────────────────────────────────
@@ -3303,7 +3498,7 @@ function showPage(name, btn) {
   if (name === 'log')       renderLog();
   if (name === 'volume')    { renderVolumeBars('vol-detail-bars', Object.keys(RP_VOL)); renderRPTable(); }
   if (name === 'strength')  renderStrengthChart();
-  if (name === 'recommend') renderRecs(currentRec);
+  if (name === 'recommend') renderRecs();
   if (name === 'planner')   renderPlanner();
   if (name === 'exercises') renderExercises();
   if (name === 'bodycomp')  renderBodyComp();
@@ -3333,13 +3528,6 @@ function switchLift(key, btn) {
   document.querySelectorAll('.lift-tab').forEach(t => t.classList.remove('active'));
   if (btn) btn.classList.add('active');
   renderStrengthChart();
-}
-
-function showRec(type, btn) {
-  currentRec = type;
-  document.querySelectorAll('#rec-tabs .tab').forEach(t => t.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  renderRecs(type);
 }
 
 function toggleDay(id) {
