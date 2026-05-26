@@ -796,19 +796,21 @@ body {
 'use strict';
 
 // ─── RP VOLUME LANDMARKS ─────────────────────────────────────────────────────
-// Source: Renaissance Periodization Hypertrophy Training Guide (rpstrength.com)
-// Sets/week: MV=maintenance, MEV=minimum effective, MAV=optimal zone, MRV=ceiling
+// Source: RP per-muscle hypertrophy training guides (rpstrength.com/blogs/articles)
+// Sets/week: MV=maintenance, MEV=minimum to grow, MAV range=optimal growth zone, MRV=ceiling
 const RP_VOL = {
-  chest:      { label:'Chest',       mv:6,  mev:10, mavLo:12, mavHi:20, mrv:22, color:'c-green' },
-  back:       { label:'Back',        mv:8,  mev:10, mavLo:14, mavHi:22, mrv:25, color:'c-teal'  },
-  shoulders:  { label:'Side Delts',  mv:6,  mev:8,  mavLo:12, mavHi:20, mrv:26, color:'c-purple'},
-  reardelts:  { label:'Rear Delts',  mv:0,  mev:6,  mavLo:10, mavHi:16, mrv:26, color:'c-purple'},
-  triceps:    { label:'Triceps',     mv:4,  mev:6,  mavLo:10, mavHi:14, mrv:18, color:'c-green' },
-  biceps:     { label:'Biceps',      mv:5,  mev:8,  mavLo:14, mavHi:20, mrv:26, color:'c-teal'  },
-  quads:      { label:'Quads',       mv:6,  mev:8,  mavLo:12, mavHi:18, mrv:20, color:'c-purple'},
-  hamstrings: { label:'Hamstrings',  mv:4,  mev:6,  mavLo:10, mavHi:16, mrv:20, color:'c-teal'  },
-  glutes:     { label:'Glutes',      mv:0,  mev:0,  mavLo:4,  mavHi:12, mrv:16, color:'c-green' },
-  calves:     { label:'Calves',      mv:6,  mev:8,  mavLo:12, mavHi:16, mrv:20, color:'c-gray'  },
+  chest:      { label:'Chest',       mv:2,  mev:4,  mavLo:6,  mavHi:16, mrv:24, color:'c-green'  },
+  back:       { label:'Back',        mv:10, mev:10, mavLo:14, mavHi:20, mrv:25, color:'c-teal'   },
+  shoulders:  { label:'Side Delts',  mv:2,  mev:6,  mavLo:8,  mavHi:24, mrv:30, color:'c-purple' },
+  reardelts:  { label:'Rear Delts',  mv:0,  mev:4,  mavLo:4,  mavHi:12, mrv:20, color:'c-purple' },
+  frontdelts: { label:'Front Delts', mv:0,  mev:2,  mavLo:4,  mavHi:8,  mrv:12, color:'c-purple' },
+  biceps:     { label:'Biceps',      mv:6,  mev:8,  mavLo:14, mavHi:20, mrv:26, color:'c-teal'   },
+  triceps:    { label:'Triceps',     mv:0,  mev:4,  mavLo:6,  mavHi:16, mrv:20, color:'c-green'  },
+  quads:      { label:'Quads',       mv:2,  mev:4,  mavLo:6,  mavHi:14, mrv:18, color:'c-purple' },
+  hamstrings: { label:'Hamstrings',  mv:0,  mev:2,  mavLo:4,  mavHi:8,  mrv:14, color:'c-teal'   },
+  glutes:     { label:'Glutes',      mv:2,  mev:6,  mavLo:8,  mavHi:24, mrv:30, color:'c-green'  },
+  calves:     { label:'Calves',      mv:2,  mev:4,  mavLo:6,  mavHi:16, mrv:24, color:'c-gray'   },
+  abs:        { label:'Abs',         mv:0,  mev:0,  mavLo:4,  mavHi:12, mrv:20, color:'c-green'  },
 };
 
 // ─── MAIN LIFTS TO TRACK ─────────────────────────────────────────────────────
@@ -822,6 +824,12 @@ const MAIN_LIFTS = [
 // ─── EXERCISE → MUSCLE MAPPING ───────────────────────────────────────────────
 function getExerciseMuscles(name) {
   const n = name.toLowerCase();
+
+  // Abs / core (check first — explicit names rarely overlap with other patterns)
+  if (/crunch|sit.?up|leg raise|knee raise|toes.?to.?bar|v.?up|candlestick|ab wheel|ab roller|hanging.*raise|hollow|dragon flag|cable woodchop|pallof/.test(n)) return ['abs'];
+
+  // Front delts — direct work only (chest pressing already over-stimulates them per RP)
+  if (/front raise|front delt/.test(n)) return ['frontdelts'];
 
   // Rear delts / upper back health (check before general "row")
   if (/face.?pull|reverse pec|rear.*(fly|flye|delt)|felt.*(fly|flye)|elastic band/.test(n)) return ['reardelts'];
@@ -1324,10 +1332,11 @@ function getRollingVolume(days = 7) {
 function getVolumeStatus(muscle, sets) {
   const d = RP_VOL[muscle];
   if (!d) return { label: 'Unknown', cls: 'pill-gray', barColor: 'c-gray' };
-  if (sets >= d.mrv)   return { label: 'At MRV', cls: 'pill-red', barColor: 'c-red' };
+  if (sets > d.mrv)    return { label: 'Over MRV', cls: 'pill-red', barColor: 'c-red' };
+  if (sets > d.mavHi)  return { label: 'Near MRV', cls: 'pill-red', barColor: 'c-red' };
   if (sets >= d.mavLo) return { label: 'In MAV', cls: 'pill-green', barColor: 'c-green' };
-  if (sets >= d.mev)   return { label: 'Above MEV', cls: 'pill-teal', barColor: 'c-teal' };
-  if (sets > 0)        return { label: 'Below MEV', cls: 'pill-gray', barColor: 'c-gray' };
+  if (sets >= d.mev && d.mev > 0) return { label: 'Above MEV', cls: 'pill-teal', barColor: 'c-teal' };
+  if (sets > 0)        return { label: d.mev > 0 ? 'Below MEV' : 'Light work', cls: 'pill-gray', barColor: 'c-gray' };
   return { label: 'No volume', cls: 'pill-gray', barColor: 'c-gray' };
 }
 
