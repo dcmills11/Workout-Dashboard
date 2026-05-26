@@ -301,6 +301,38 @@ body {
 .ex-empty-history { color: var(--text3); font-size: 11px; font-style: italic; }
 .ex-custom-flag { font-size: 9px; color: var(--accent4); text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 6px; background: rgba(160,107,255,0.1); border-radius: 4px; }
 
+/* MESO BAR */
+.meso-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--rad);
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+  font-size: 13px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.meso-bar.empty { border-left-color: var(--border2); background: var(--surface2); }
+.meso-bar-left { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.meso-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+.meso-week { color: var(--text); font-weight: 600; font-size: 14px; }
+.meso-rir { color: var(--accent3); font-weight: 500; }
+.meso-phase { color: var(--accent4); font-size: 12px; }
+.meso-hint { font-size: 11px; color: var(--text3); }
+.meso-bar-edit { font-size: 11px; padding: 5px 12px; border-radius: var(--rad); border: 1px solid var(--border2); background: none; color: var(--text2); cursor: pointer; font-family: 'DM Sans', sans-serif; }
+.meso-bar-edit:hover { color: var(--accent); border-color: var(--accent); }
+.rir-pill { display: inline-flex; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 600; background: rgba(107,255,213,0.12); color: var(--accent3); letter-spacing: 0.04em; }
+.rir-pill.deload { background: rgba(232,255,107,0.12); color: var(--accent); }
+
+/* PLAN EXERCISE LAST-TIME ROW */
+.plan-ex-last { font-size: 11px; color: var(--text3); margin-top: 3px; padding-top: 2px; }
+.plan-ex-last .w-val { color: var(--text2); }
+.plan-ex-last.empty { font-style: italic; color: var(--text3); opacity: 0.6; }
+
 /* LAST WORKOUT CARD */
 .lw-header {
   display: flex;
@@ -432,6 +464,8 @@ body {
         </div>
         <button class="btn btn-primary btn-sm" onclick="showPage('log',document.querySelector('.nav-item:nth-child(2)'));setTimeout(()=>switchLogTab('import'),50)">+ Import Session</button>
       </div>
+      <div id="overview-meso-bar"></div>
+
       <div class="grid g-4" style="margin-bottom:18px">
         <div class="stat-card c-green">
           <div class="stat-label">Sessions (7d)</div>
@@ -633,6 +667,8 @@ body {
         </div>
       </div>
 
+      <div id="planner-meso-bar"></div>
+
       <div class="section-heading">Projected rolling 7-day volume (already-done + planned)</div>
       <div class="card" style="margin-bottom:18px">
         <div class="card-header">
@@ -769,6 +805,52 @@ body {
     </div>
 
   </main>
+</div>
+
+<!-- MESOCYCLE MODAL -->
+<div class="modal-overlay" id="meso-modal">
+  <div class="modal">
+    <h2>Mesocycle settings</h2>
+    <div class="form-group">
+      <label class="form-label">Meso start date (Monday of week 1)</label>
+      <input type="date" class="form-input" id="meso-start-input">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mesocycle length</label>
+      <select class="form-select" id="meso-length-input">
+        <option value="4">4 weeks</option>
+        <option value="5">5 weeks</option>
+        <option value="6" selected>6 weeks (RP default)</option>
+        <option value="8">8 weeks</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mesocycle number (for tracking long-term)</label>
+      <input type="number" class="form-input" id="meso-number-input" min="1" value="1">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Manual week override (optional — leave blank to auto-calc from start date)</label>
+      <select class="form-select" id="meso-manual-input">
+        <option value="">— Auto-calculate from start date —</option>
+        <option value="1">Week 1 (3–4 RIR)</option>
+        <option value="2">Week 2 (2–3 RIR)</option>
+        <option value="3">Week 3 (2 RIR)</option>
+        <option value="4">Week 4 (1 RIR)</option>
+        <option value="5">Week 5 (0–1 RIR)</option>
+        <option value="6">Week 6 — Deload</option>
+      </select>
+    </div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;padding:8px 12px;background:var(--surface2);border-radius:var(--rad);margin-bottom:14px">
+      <strong style="color:var(--accent)">Tip:</strong> Set the meso start date to the Monday you began Week 1. The app auto-advances each week. After a deload week, click "Start new mesocycle" to bump TM +5/+10 and reset to Week 1.
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost" onclick="startNewMeso()" style="color:var(--accent3)">Start new mesocycle</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal('meso-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitMeso()">Save</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- WEIGHT MODAL -->
@@ -1015,12 +1097,82 @@ const WORKOUT_TEMPLATES = {
     ]
   },
   plyo_only: {
-    id:'plyo_only', name:'Plyometrics only (short)', type:'plyo', color:'#ff7aff',
+    id:'plyo_only', name:'Plyometrics only (auto-phase)', type:'plyo', color:'#ff7aff',
     exercises:[
       { name:'Pogo Jumps',                  muscles:['calves'],                    sets:2 },
       { name:'Box Jumps (plyo)',            muscles:[],                            sets:4 },
       { name:'Broad Jumps (plyo)',          muscles:[],                            sets:3 },
       { name:'Depth Drops (plyo)',          muscles:[],                            sets:3 },
+    ]
+  },
+
+  // ── Plyo-phase variants (auto-selected by current meso week via resolveTemplate) ──
+  legs_plyo_foundation: {
+    id:'legs_plyo_foundation', name:'Legs + Plyo (Foundation · wk 1-2)', type:'legs', color:'#a06bff',
+    exercises:[
+      { name:'Pogo Jumps (plyo)',           muscles:['calves'], sets:2 },
+      { name:'Box Jumps 12-18" (plyo)',     muscles:[],         sets:3 },
+      { name:'Broad Jumps (plyo)',          muscles:[],         sets:3 },
+      { name:'Squat 5/3/1',                 muscles:['quads','glutes'], sets:3 },
+      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'], sets:3 },
+      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
+      { name:'Leg Extension',               muscles:['quads'], sets:3 },
+      { name:'Seated Leg Curl',             muscles:['hamstrings'], sets:3 },
+      { name:'Hip Thrust',                  muscles:['glutes'], sets:3 },
+      { name:'Standing Calf Raise (15-20)', muscles:['calves'], sets:4 },
+    ]
+  },
+  legs_plyo_power: {
+    id:'legs_plyo_power', name:'Legs + Plyo (Power · wk 3-4)', type:'legs', color:'#a06bff',
+    exercises:[
+      { name:'Box Jumps 24" (plyo)',        muscles:[], sets:4 },
+      { name:'Broad Jumps (plyo)',          muscles:[], sets:3 },
+      { name:'Single-Leg Bounds (plyo)',    muscles:[], sets:2 },
+      { name:'Squat 5/3/1',                 muscles:['quads','glutes'], sets:3 },
+      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'], sets:3 },
+      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
+      { name:'Leg Extension',               muscles:['quads'], sets:3 },
+      { name:'Seated Leg Curl',             muscles:['hamstrings'], sets:3 },
+      { name:'Hip Thrust',                  muscles:['glutes'], sets:3 },
+      { name:'Standing Calf Raise',         muscles:['calves'], sets:4 },
+    ]
+  },
+  legs_plyo_reactive: {
+    id:'legs_plyo_reactive', name:'Legs + Plyo (Reactive · wk 5-6)', type:'legs', color:'#a06bff',
+    exercises:[
+      { name:'Depth Jumps 12" (plyo)',      muscles:[], sets:3 },
+      { name:'Max Box Jumps (plyo)',        muscles:[], sets:4 },
+      { name:'Hurdle Hops (plyo)',          muscles:[], sets:3 },
+      { name:'Squat 5/3/1',                 muscles:['quads','glutes'], sets:3 },
+      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'], sets:3 },
+      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
+      { name:'Seated Leg Curl',             muscles:['hamstrings'], sets:3 },
+      { name:'Hip Thrust',                  muscles:['glutes'], sets:3 },
+      { name:'Standing Calf Raise',         muscles:['calves'], sets:4 },
+    ]
+  },
+  plyo_foundation: {
+    id:'plyo_foundation', name:'Plyo only — Foundation', type:'plyo', color:'#ff7aff',
+    exercises:[
+      { name:'Pogo Jumps (plyo)',           muscles:['calves'], sets:2 },
+      { name:'Box Jumps 12-18" (plyo)',     muscles:[],         sets:3 },
+      { name:'Broad Jumps (plyo)',          muscles:[],         sets:3 },
+    ]
+  },
+  plyo_power: {
+    id:'plyo_power', name:'Plyo only — Power', type:'plyo', color:'#ff7aff',
+    exercises:[
+      { name:'Box Jumps 24" (plyo)',        muscles:[], sets:4 },
+      { name:'Broad Jumps (plyo)',          muscles:[], sets:3 },
+      { name:'Single-Leg Bounds (plyo)',    muscles:[], sets:2 },
+    ]
+  },
+  plyo_reactive: {
+    id:'plyo_reactive', name:'Plyo only — Reactive', type:'plyo', color:'#ff7aff',
+    exercises:[
+      { name:'Depth Jumps 12" (plyo)',      muscles:[], sets:3 },
+      { name:'Max Box Jumps (plyo)',        muscles:[], sets:4 },
+      { name:'Hurdle Hops (plyo)',          muscles:[], sets:3 },
     ]
   },
 };
@@ -1076,6 +1228,112 @@ function setMuscleOverride(name, muscles) {
 
 function hasOverride(name) {
   return getMuscleOverrides()[normalizeExerciseName(name)] !== undefined;
+}
+
+// ─── MESOCYCLE ───────────────────────────────────────────────────────────────
+function getMesocycle() {
+  const data = loadData();
+  return data.mesocycle || null;
+}
+
+function setMesocycle(meso) {
+  const data = loadData();
+  data.mesocycle = meso;
+  saveData(data);
+}
+
+function getCurrentMesoWeek() {
+  const m = getMesocycle();
+  if (!m || !m.startDate) return null;
+  if (m.manualWeek) return parseInt(m.manualWeek);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(m.startDate + 'T12:00:00');
+  start.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((today - start) / 86400000);
+  if (diffDays < 0) return 1; // not started yet
+  const length = m.totalWeeks || 6;
+  const week = (Math.floor(diffDays / 7) % length) + 1;
+  return week;
+}
+
+function getRIRForWeek(week, totalWeeks) {
+  totalWeeks = totalWeeks || 6;
+  if (week === totalWeeks) return { label: 'Deload', value: 5, deload: true };
+  // Linear progression from 3-4 RIR (week 1) to 0-1 RIR (final hard week)
+  const hardWeeks = totalWeeks - 1;
+  const progress = (week - 1) / Math.max(1, hardWeeks - 1); // 0..1
+  // 6-week meso: weeks 1..5 hard, week 6 deload
+  // RIR table for 6-week: w1=3-4, w2=2-3, w3=2, w4=1, w5=0-1
+  if (totalWeeks === 6) {
+    const t = { 1: '3–4', 2: '2–3', 3: '2', 4: '1', 5: '0–1' };
+    return { label: t[week] || '?', value: 4 - (week - 1) * 0.75, deload: false };
+  }
+  // Generic
+  const rir = Math.max(0, 3 - progress * 3);
+  return { label: rir.toFixed(1), value: rir, deload: false };
+}
+
+function getPlyoPhaseForWeek(week, totalWeeks) {
+  totalWeeks = totalWeeks || 6;
+  if (week === totalWeeks) return null; // deload — drop plyos
+  if (week <= 2) return 'foundation';
+  if (week <= 4) return 'power';
+  return 'reactive';
+}
+
+function getCurrentRIR() {
+  const w = getCurrentMesoWeek();
+  if (!w) return null;
+  const m = getMesocycle();
+  return getRIRForWeek(w, m?.totalWeeks);
+}
+
+// Resolves a template ID, substituting plyo phase variants based on current meso week
+function resolveTemplate(templateId) {
+  const week = getCurrentMesoWeek() || 1;
+  const m = getMesocycle();
+  const totalWeeks = m?.totalWeeks || 6;
+  const phase = getPlyoPhaseForWeek(week, totalWeeks);
+
+  if (templateId === 'legs_plyo') {
+    if (!phase) return WORKOUT_TEMPLATES.legs; // deload — no plyo
+    return WORKOUT_TEMPLATES['legs_plyo_' + phase] || WORKOUT_TEMPLATES.legs_plyo_foundation;
+  }
+  if (templateId === 'plyo_only') {
+    if (!phase) return WORKOUT_TEMPLATES.rest;
+    return WORKOUT_TEMPLATES['plyo_' + phase] || WORKOUT_TEMPLATES.plyo_foundation;
+  }
+  return WORKOUT_TEMPLATES[templateId];
+}
+
+// Look up the last performed instance of an exercise (for planner "last time" display)
+function getLastPerformedExercise(exerciseName) {
+  const key = normalizeExerciseName(exerciseName);
+  const sessions = getSessions();
+  for (const s of sessions) {
+    for (const ex of s.exercises) {
+      if (normalizeExerciseName(ex.name) === key && !ex.isSkipped && ex.sets.length > 0) {
+        return { date: s.date, sets: ex.sets };
+      }
+    }
+  }
+  return null;
+}
+
+function formatLastSets(sets) {
+  if (!sets || !sets.length) return '';
+  const grouped = {};
+  const order = [];
+  for (const s of sets) {
+    const k = s.weightRaw || (s.weight != null ? String(s.weight) : '?');
+    if (!grouped[k]) { grouped[k] = []; order.push(k); }
+    grouped[k].push(s.reps);
+  }
+  return order.map(k => {
+    const w = k.includes('*') ? k.replace('*', '×') : (isNaN(parseFloat(k)) ? k : `${k} lb`);
+    return `<span class="w-val">${w}</span> × ${grouped[k].join(',')}`;
+  }).join(' · ');
 }
 
 function setPlanForDate(date, templateId) {
@@ -1804,6 +2062,8 @@ function renderRecs(type) {
 // ─── RENDER: OVERVIEW ────────────────────────────────────────────────────────
 
 function renderOverview() {
+  renderMesoBar('overview-meso-bar');
+
   const sessions = getSessions();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -2164,6 +2424,8 @@ function toggleMuscle(key, muscle) {
 // ─── RENDER: PLANNER ─────────────────────────────────────────────────────────
 
 function renderPlanner() {
+  renderMesoBar('planner-meso-bar');
+
   const container = document.getElementById('planner-days');
   if (!container) return;
 
@@ -2174,11 +2436,8 @@ function renderPlanner() {
   for (const p of plans) planMap[p.date] = p.templateId;
 
   const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-
-  const dropdownOptions = TEMPLATE_ORDER.map(id => {
-    const t = WORKOUT_TEMPLATES[id];
-    return `<option value="${id}">${t.name}</option>`;
-  }).join('');
+  const liftingTypes = new Set(['push','pull','legs','plyo']);
+  const rir = getCurrentRIR();
 
   let html = '';
   for (let i = 0; i < 7; i++) {
@@ -2187,7 +2446,8 @@ function renderPlanner() {
     const iso = d.toISOString().split('T')[0];
     const dow = d.getDay();
     const planned = planMap[iso];
-    const tmpl = planned ? WORKOUT_TEMPLATES[planned] : null;
+    // Resolve plyo phase based on meso week
+    const tmpl = planned ? resolveTemplate(planned) : null;
     const isToday = i === 0;
 
     const muscleCounts = {};
@@ -2200,16 +2460,40 @@ function renderPlanner() {
       .map(([m, c]) => `<span class="pill pill-gray" style="font-size:10px">${RP_VOL[m]?.label || m} ${c}</span>`)
       .join(' ');
 
-    const exerciseList = tmpl && tmpl.exercises.length
-      ? `<ul class="plan-exercises">
-          ${tmpl.exercises.map(ex => `
-            <li>
+    // RIR pill on lifting days when meso is active
+    const showRIR = tmpl && liftingTypes.has(tmpl.type) && rir;
+    const rirPill = showRIR
+      ? (rir.deload
+          ? `<span class="rir-pill deload">Deload</span>`
+          : `<span class="rir-pill">${rir.label} RIR</span>`)
+      : '';
+
+    // Build exercise list with last-time data
+    let exerciseList = '';
+    if (tmpl && tmpl.exercises.length) {
+      exerciseList = `<ul class="plan-exercises">
+        ${tmpl.exercises.map(ex => {
+          const last = getLastPerformedExercise(ex.name);
+          const lastHtml = last
+            ? `<div class="plan-ex-last">Last (${formatDateShort(last.date)}): ${formatLastSets(last.sets)}</div>`
+            : `<div class="plan-ex-last empty">No prior log for this exercise</div>`;
+          return `<li style="flex-direction:column;align-items:stretch">
+            <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
               <span class="plan-ex-name">${ex.name}</span>
               <span class="plan-ex-meta">${ex.sets} sets${ex.muscles.length ? ' · ' + ex.muscles.map(m => RP_VOL[m]?.label || m).join(', ') : ''}</span>
-            </li>
-          `).join('')}
-        </ul>`
-      : (tmpl ? '<div style="font-size:12px;color:var(--text3)">No volume contribution (recovery/conditioning).</div>' : '');
+            </div>
+            ${lastHtml}
+          </li>`;
+        }).join('')}
+      </ul>`;
+    } else if (tmpl) {
+      exerciseList = '<div style="font-size:12px;color:var(--text3)">No volume contribution (recovery/conditioning).</div>';
+    }
+
+    // Show "auto-resolved" indicator when plyo phase substitution happened
+    const phaseNote = (planned === 'legs_plyo' || planned === 'plyo_only') && tmpl && tmpl.id !== planned
+      ? `<span style="font-size:10px;color:var(--accent4);padding:2px 6px;background:rgba(160,107,255,0.1);border-radius:4px">${tmpl.name}</span>`
+      : '';
 
     html += `<div class="plan-day ${isToday ? 'today' : ''}">
       <div class="plan-day-header">
@@ -2217,6 +2501,8 @@ function renderPlanner() {
           <span class="plan-day-name">${dayNames[dow]}</span>
           <span class="plan-day-date">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
           ${isToday ? '<span class="plan-day-pill">Today</span>' : ''}
+          ${rirPill}
+          ${phaseNote}
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${muscleTags ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${muscleTags}</div>` : ''}
@@ -2274,7 +2560,7 @@ function renderPlanProjection() {
   for (const p of getPlans()) {
     const d = new Date(p.date + 'T12:00:00');
     if (d <= today || d > endDate) continue;
-    const tmpl = WORKOUT_TEMPLATES[p.templateId];
+    const tmpl = resolveTemplate(p.templateId);
     if (!tmpl) continue;
     for (const ex of tmpl.exercises) {
       for (const m of ex.muscles) planVol[m] = (planVol[m] || 0) + ex.sets;
@@ -2385,6 +2671,85 @@ function renderBodyComp() {
       }).join('')}
     </div>`;
   }
+}
+
+// ─── MESO BAR ─────────────────────────────────────────────────────────────────
+function renderMesoBar(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const m = getMesocycle();
+  const week = getCurrentMesoWeek();
+  const rir = getCurrentRIR();
+  const phase = week ? getPlyoPhaseForWeek(week, m?.totalWeeks) : null;
+
+  if (!m || !m.startDate) {
+    el.innerHTML = `<div class="meso-bar empty">
+      <div class="meso-bar-left">
+        <span class="meso-label">Mesocycle</span>
+        <span class="meso-hint">Not started — set a start date to track RIR targets and plyo phase</span>
+      </div>
+      <button class="meso-bar-edit" onclick="openMesoModal()">Set up</button>
+    </div>`;
+    return;
+  }
+
+  const phaseLabel = phase ? phase.charAt(0).toUpperCase() + phase.slice(1) : 'None (deload)';
+  const totalWeeks = m.totalWeeks || 6;
+  const rirHtml = rir.deload
+    ? `<span class="rir-pill deload">DELOAD WEEK</span>`
+    : `<span class="rir-pill">Target ${rir.label} RIR</span>`;
+
+  el.innerHTML = `<div class="meso-bar">
+    <div class="meso-bar-left">
+      <span class="meso-label">Meso ${m.mesoNumber || 1}</span>
+      <span class="meso-week">Week ${week} of ${totalWeeks}</span>
+      ${rirHtml}
+      <span class="meso-phase">Plyo: ${phaseLabel}</span>
+    </div>
+    <button class="meso-bar-edit" onclick="openMesoModal()">Edit</button>
+  </div>`;
+}
+
+function openMesoModal() {
+  const m = getMesocycle() || {};
+  document.getElementById('meso-start-input').value = m.startDate || new Date().toISOString().split('T')[0];
+  document.getElementById('meso-length-input').value = m.totalWeeks || 6;
+  document.getElementById('meso-number-input').value = m.mesoNumber || 1;
+  document.getElementById('meso-manual-input').value = m.manualWeek || '';
+  document.getElementById('meso-modal').classList.add('open');
+}
+
+function submitMeso() {
+  const startDate = document.getElementById('meso-start-input').value;
+  const totalWeeks = parseInt(document.getElementById('meso-length-input').value) || 6;
+  const mesoNumber = parseInt(document.getElementById('meso-number-input').value) || 1;
+  const manualWeekRaw = document.getElementById('meso-manual-input').value;
+  const manualWeek = manualWeekRaw ? parseInt(manualWeekRaw) : null;
+
+  if (!startDate) { showToast('Please pick a start date', true); return; }
+
+  setMesocycle({ startDate, totalWeeks, mesoNumber, manualWeek });
+  closeModal('meso-modal');
+  renderMesoBar('overview-meso-bar');
+  renderMesoBar('planner-meso-bar');
+  renderPlanner();
+  showToast('Mesocycle saved');
+}
+
+function startNewMeso() {
+  if (!confirm('Start a new mesocycle? Sets meso number +1, start date = today, week = 1, clears manual override.')) return;
+  const m = getMesocycle() || {};
+  setMesocycle({
+    startDate: new Date().toISOString().split('T')[0],
+    totalWeeks: m.totalWeeks || 6,
+    mesoNumber: (m.mesoNumber || 1) + 1,
+    manualWeek: null,
+  });
+  closeModal('meso-modal');
+  renderMesoBar('overview-meso-bar');
+  renderMesoBar('planner-meso-bar');
+  renderPlanner();
+  showToast('New mesocycle started — remember to bump your 5/3/1 TM (+5 upper / +10 lower)');
 }
 
 // ─── INTERACTIONS ────────────────────────────────────────────────────────────
