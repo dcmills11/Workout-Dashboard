@@ -616,6 +616,22 @@ body {
           <div class="import-feedback" id="import-feedback"></div>
         </div>
         <div class="card">
+          <div class="card-header"><div class="card-title">Backup &amp; restore</div></div>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6;">
+            Your data lives in this browser's localStorage — wiped if you clear browser data, and not shared across devices.
+            Export saves a JSON file you can keep in Dropbox/Drive/email; import restores it on any device.
+          </p>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="exportAllData()">⬇ Export all data (JSON)</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('import-file').click()">⬆ Import data from file</button>
+            <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="handleImportFile(event)">
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6">
+            Includes: sessions, planned workouts, bodyweight log, mesocycle settings, and muscle overrides.
+            Suggested habit: export after each meso (every 6 weeks) and save to cloud storage.
+          </div>
+        </div>
+        <div class="card">
           <div class="card-header"><div class="card-title">Format guide</div></div>
           <div style="font-size:12px;color:var(--text2);line-height:1.9;">
             <code style="color:var(--accent);background:var(--surface2);padding:1px 6px;border-radius:4px;">4/12/26</code> — date row (East/Adria in next column = gym location)<br>
@@ -945,7 +961,6 @@ const RP_VOL = {
   back:       { label:'Back',        mv:10, mev:10, mavLo:14, mavHi:20, mrv:25, color:'c-teal'   },
   shoulders:  { label:'Side Delts',  mv:2,  mev:6,  mavLo:8,  mavHi:24, mrv:30, color:'c-purple' },
   reardelts:  { label:'Rear Delts',  mv:0,  mev:4,  mavLo:4,  mavHi:12, mrv:20, color:'c-purple' },
-  frontdelts: { label:'Front Delts', mv:0,  mev:2,  mavLo:4,  mavHi:8,  mrv:12, color:'c-purple' },
   biceps:     { label:'Biceps',      mv:6,  mev:8,  mavLo:14, mavHi:20, mrv:26, color:'c-teal'   },
   triceps:    { label:'Triceps',     mv:0,  mev:4,  mavLo:6,  mavHi:16, mrv:20, color:'c-green'  },
   quads:      { label:'Quads',       mv:2,  mev:4,  mavLo:6,  mavHi:14, mrv:18, color:'c-purple' },
@@ -969,9 +984,6 @@ function getExerciseMuscles(name) {
 
   // Abs / core (check first — explicit names rarely overlap with other patterns)
   if (/crunch|sit.?up|leg raise|knee raise|toes.?to.?bar|v.?up|candlestick|ab wheel|ab roller|hanging.*raise|hollow|dragon flag|cable woodchop|pallof/.test(n)) return ['abs'];
-
-  // Front delts — direct work only (chest pressing already over-stimulates them per RP)
-  if (/front raise|front delt/.test(n)) return ['frontdelts'];
 
   // Rear delts / upper back health (check before general "row")
   if (/face.?pull|reverse pec|rear.*(fly|flye|delt)|felt.*(fly|flye)|elastic band/.test(n)) return ['reardelts'];
@@ -1083,86 +1095,86 @@ const WORKOUT_TEMPLATES = {
   push_bench: {
     id:'push_bench', name:'Push A — Bench day', type:'push', color:'#e8ff6b',
     exercises:[
-      { name:'Bench Press 5/3/1',          muscles:['chest','triceps'],   sets:3 },
-      { name:'Bench Press FSL',            muscles:['chest','triceps'],   sets:3 },
-      { name:'Incline DB Press',           muscles:['chest'],             sets:3 },
-      { name:'Cable Lateral Raise',        muscles:['shoulders'],         sets:3 },
-      { name:'Cable Tricep Pushdown',      muscles:['triceps'],           sets:3 },
-      { name:'Standing Calf Raise (heavy 10-12)', muscles:['calves'],     sets:4 },
-      { name:'Hanging Knee Raise',         muscles:['abs'],               sets:3 },
+      { name:'Bench Press 5/3/1',          muscles:['chest','triceps'],   sets:3, reps:'per 5/3/1 cycle' },
+      { name:'Bench Press FSL',            muscles:['chest','triceps'],   sets:3, reps:'5-10' },
+      { name:'Incline DB Press',           muscles:['chest'],             sets:3, reps:'8-12' },
+      { name:'Cable Lateral Raise',        muscles:['shoulders'],         sets:3, reps:'12-15' },
+      { name:'Cable Tricep Pushdown',      muscles:['triceps'],           sets:3, reps:'10-12' },
+      { name:'Standing Calf Raise',        muscles:['calves'],            sets:4, reps:'10-12' },
+      { name:'Hanging Knee Raise',         muscles:['abs'],               sets:3, reps:'10-15' },
     ]
   },
   push_ohp: {
     id:'push_ohp', name:'Push B — OHP day', type:'push', color:'#e8ff6b',
     exercises:[
-      { name:'Overhead Press 5/3/1 (4x6-8)', muscles:['shoulders','triceps'], sets:4 },
-      { name:'Close Grip Bench Press (6-8)', muscles:['chest','triceps'],     sets:3 },
-      { name:'Incline DB Fly',              muscles:['chest'],               sets:3 },
-      { name:'Machine Lateral Raise',       muscles:['shoulders'],           sets:3 },
-      { name:'Overhead Cable Tricep Extension', muscles:['triceps'],         sets:3 },
-      { name:'Hammer Curl',                 muscles:['biceps'],              sets:3 },
-      { name:'Standing Calf Raise',         muscles:['calves'],              sets:3 },
+      { name:'Overhead Press 5/3/1',        muscles:['shoulders','triceps'], sets:4, reps:'6-8' },
+      { name:'Close Grip Bench Press',      muscles:['chest','triceps'],     sets:3, reps:'6-8' },
+      { name:'Incline DB Fly',              muscles:['chest'],               sets:3, reps:'10-12' },
+      { name:'Machine Lateral Raise',       muscles:['shoulders'],           sets:3, reps:'10-15' },
+      { name:'Overhead Cable Tricep Extension', muscles:['triceps'],         sets:3, reps:'10-12' },
+      { name:'Hammer Curl',                 muscles:['biceps'],              sets:3, reps:'10-12' },
+      { name:'Standing Calf Raise',         muscles:['calves'],              sets:3, reps:'12-15' },
     ]
   },
   pull_back: {
     id:'pull_back', name:'Pull A — Back focused', type:'pull', color:'#6bffd5',
     exercises:[
-      { name:'Weighted Pull-Up',            muscles:['back','biceps'],     sets:3 },
-      { name:'T-Bar Row (horizontal heavy)', muscles:['back'],             sets:3 },
-      { name:'Single Arm Cable Row',        muscles:['back'],              sets:3 },
-      { name:'Lat Pulldown (close neutral)', muscles:['back'],             sets:3 },
-      { name:'Kneeling Cable Pullover',     muscles:['back'],              sets:2 },
-      { name:'Cable Face Pull',             muscles:['reardelts'],         sets:3 },
-      { name:'Reverse Pec Deck',            muscles:['reardelts'],         sets:3 },
-      { name:'Incline DB Curl',             muscles:['biceps'],            sets:3 },
-      { name:'EZ Bar Curl',                 muscles:['biceps'],            sets:3 },
-      { name:'Cable Crunch',                muscles:['abs'],               sets:3 },
+      { name:'Weighted Pull-Up',            muscles:['back','biceps'],     sets:3, reps:'6-10' },
+      { name:'T-Bar Row',                   muscles:['back'],              sets:3, reps:'8-10' },
+      { name:'Single Arm Cable Row',        muscles:['back'],              sets:3, reps:'10-12' },
+      { name:'Lat Pulldown (close neutral)', muscles:['back'],             sets:3, reps:'10-15' },
+      { name:'Kneeling Cable Pullover',     muscles:['back'],              sets:2, reps:'12-15' },
+      { name:'Cable Face Pull',             muscles:['reardelts'],         sets:3, reps:'15-20' },
+      { name:'Reverse Pec Deck',            muscles:['reardelts'],         sets:3, reps:'12-15' },
+      { name:'Incline DB Curl',             muscles:['biceps'],            sets:3, reps:'10-12' },
+      { name:'EZ Bar Curl',                 muscles:['biceps'],            sets:3, reps:'10-12' },
+      { name:'Cable Crunch',                muscles:['abs'],               sets:3, reps:'10-15' },
     ]
   },
   pull_deadlift: {
     id:'pull_deadlift', name:'Pull B — Deadlift day', type:'pull', color:'#6bffd5',
     exercises:[
-      { name:'Deadlift 5/3/1',              muscles:['back','hamstrings'], sets:3 },
-      { name:'Deadlift FSL',                muscles:['back','hamstrings'], sets:2 },
-      { name:'Weighted Pull-Up',            muscles:['back','biceps'],     sets:3 },
-      { name:'Meadow Row',                  muscles:['back'],              sets:3 },
-      { name:'Cable Face Pull',             muscles:['reardelts'],         sets:3 },
-      { name:'Hammer Curl',                 muscles:['biceps'],            sets:3 },
-      { name:'Hanging Leg Raise',           muscles:['abs'],               sets:3 },
+      { name:'Deadlift 5/3/1',              muscles:['back','hamstrings'], sets:3, reps:'per 5/3/1 cycle' },
+      { name:'Deadlift FSL',                muscles:['back','hamstrings'], sets:2, reps:'5-8' },
+      { name:'Weighted Pull-Up',            muscles:['back','biceps'],     sets:3, reps:'6-10' },
+      { name:'Meadow Row',                  muscles:['back'],              sets:3, reps:'8-10/arm' },
+      { name:'Cable Face Pull',             muscles:['reardelts'],         sets:3, reps:'15-20' },
+      { name:'Hammer Curl',                 muscles:['biceps'],            sets:3, reps:'10-12' },
+      { name:'Hanging Leg Raise',           muscles:['abs'],               sets:3, reps:'8-12' },
     ]
   },
   legs: {
     id:'legs', name:'Legs — Strength + Hypertrophy', type:'legs', color:'#a06bff',
     exercises:[
-      { name:'Squat 5/3/1',                 muscles:['quads','glutes'],            sets:3 },
-      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'],       sets:3 },
-      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
-      { name:'Leg Extension',               muscles:['quads'],                     sets:3 },
-      { name:'Seated Leg Curl',             muscles:['hamstrings'],                sets:3 },
-      { name:'Hip Thrust',                  muscles:['glutes'],                    sets:3 },
-      { name:'Standing Calf Raise (15-20)', muscles:['calves'],                    sets:4 },
+      { name:'Squat 5/3/1',                 muscles:['quads','glutes'],            sets:3, reps:'per 5/3/1 cycle' },
+      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'],       sets:3, reps:'8-10' },
+      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3, reps:'10/leg' },
+      { name:'Leg Extension',               muscles:['quads'],                     sets:3, reps:'12-15' },
+      { name:'Seated Leg Curl',             muscles:['hamstrings'],                sets:3, reps:'10-12' },
+      { name:'Hip Thrust',                  muscles:['glutes'],                    sets:3, reps:'8-12' },
+      { name:'Standing Calf Raise',         muscles:['calves'],                    sets:4, reps:'15-20' },
     ]
   },
   legs_plyo: {
-    id:'legs_plyo', name:'Legs + Plyo (Squat day)', type:'legs', color:'#a06bff',
+    id:'legs_plyo', name:'Legs + Plyo (auto-phase)', type:'legs', color:'#a06bff',
     exercises:[
-      { name:'Box Jumps (plyo)',            muscles:[],                            sets:4 },
-      { name:'Squat 5/3/1',                 muscles:['quads','glutes'],            sets:3 },
-      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'],       sets:3 },
-      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
-      { name:'Leg Extension',               muscles:['quads'],                     sets:3 },
-      { name:'Seated Leg Curl',             muscles:['hamstrings'],                sets:3 },
-      { name:'Hip Thrust',                  muscles:['glutes'],                    sets:3 },
-      { name:'Standing Calf Raise (15-20)', muscles:['calves'],                    sets:4 },
+      { name:'Box Jumps (plyo)',            muscles:[],                            sets:4, reps:'3' },
+      { name:'Squat 5/3/1',                 muscles:['quads','glutes'],            sets:3, reps:'per 5/3/1 cycle' },
+      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'],       sets:3, reps:'8-10' },
+      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3, reps:'10/leg' },
+      { name:'Leg Extension',               muscles:['quads'],                     sets:3, reps:'12-15' },
+      { name:'Seated Leg Curl',             muscles:['hamstrings'],                sets:3, reps:'10-12' },
+      { name:'Hip Thrust',                  muscles:['glutes'],                    sets:3, reps:'8-12' },
+      { name:'Standing Calf Raise',         muscles:['calves'],                    sets:4, reps:'15-20' },
     ]
   },
   plyo_only: {
     id:'plyo_only', name:'Plyometrics only (auto-phase)', type:'plyo', color:'#ff7aff',
     exercises:[
-      { name:'Pogo Jumps',                  muscles:['calves'],                    sets:2 },
-      { name:'Box Jumps (plyo)',            muscles:[],                            sets:4 },
-      { name:'Broad Jumps (plyo)',          muscles:[],                            sets:3 },
-      { name:'Depth Drops (plyo)',          muscles:[],                            sets:3 },
+      { name:'Pogo Jumps',                  muscles:['calves'],                    sets:2, reps:'10' },
+      { name:'Box Jumps (plyo)',            muscles:[],                            sets:4, reps:'3' },
+      { name:'Broad Jumps (plyo)',          muscles:[],                            sets:3, reps:'4' },
+      { name:'Depth Drops (plyo)',          muscles:[],                            sets:3, reps:'3' },
     ]
   },
 
@@ -1170,69 +1182,69 @@ const WORKOUT_TEMPLATES = {
   legs_plyo_foundation: {
     id:'legs_plyo_foundation', name:'Legs + Plyo (Foundation · wk 1-2)', type:'legs', color:'#a06bff',
     exercises:[
-      { name:'Pogo Jumps (plyo)',           muscles:['calves'], sets:2 },
-      { name:'Box Jumps 12-18" (plyo)',     muscles:[],         sets:3 },
-      { name:'Broad Jumps (plyo)',          muscles:[],         sets:3 },
-      { name:'Squat 5/3/1',                 muscles:['quads','glutes'], sets:3 },
-      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'], sets:3 },
-      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
-      { name:'Leg Extension',               muscles:['quads'], sets:3 },
-      { name:'Seated Leg Curl',             muscles:['hamstrings'], sets:3 },
-      { name:'Hip Thrust',                  muscles:['glutes'], sets:3 },
-      { name:'Standing Calf Raise (15-20)', muscles:['calves'], sets:4 },
+      { name:'Pogo Jumps (plyo)',           muscles:['calves'], sets:2, reps:'10' },
+      { name:'Box Jumps 12-18" (plyo)',     muscles:[],         sets:3, reps:'3' },
+      { name:'Broad Jumps (plyo)',          muscles:[],         sets:3, reps:'4' },
+      { name:'Squat 5/3/1',                 muscles:['quads','glutes'], sets:3, reps:'per 5/3/1 cycle' },
+      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'], sets:3, reps:'8-10' },
+      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3, reps:'10/leg' },
+      { name:'Leg Extension',               muscles:['quads'], sets:3, reps:'12-15' },
+      { name:'Seated Leg Curl',             muscles:['hamstrings'], sets:3, reps:'10-12' },
+      { name:'Hip Thrust',                  muscles:['glutes'], sets:3, reps:'8-12' },
+      { name:'Standing Calf Raise',         muscles:['calves'], sets:4, reps:'15-20' },
     ]
   },
   legs_plyo_power: {
     id:'legs_plyo_power', name:'Legs + Plyo (Power · wk 3-4)', type:'legs', color:'#a06bff',
     exercises:[
-      { name:'Box Jumps 24" (plyo)',        muscles:[], sets:4 },
-      { name:'Broad Jumps (plyo)',          muscles:[], sets:3 },
-      { name:'Single-Leg Bounds (plyo)',    muscles:[], sets:2 },
-      { name:'Squat 5/3/1',                 muscles:['quads','glutes'], sets:3 },
-      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'], sets:3 },
-      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
-      { name:'Leg Extension',               muscles:['quads'], sets:3 },
-      { name:'Seated Leg Curl',             muscles:['hamstrings'], sets:3 },
-      { name:'Hip Thrust',                  muscles:['glutes'], sets:3 },
-      { name:'Standing Calf Raise',         muscles:['calves'], sets:4 },
+      { name:'Box Jumps 24" (plyo)',        muscles:[], sets:4, reps:'3' },
+      { name:'Broad Jumps (plyo)',          muscles:[], sets:3, reps:'4' },
+      { name:'Single-Leg Bounds (plyo)',    muscles:[], sets:2, reps:'6/leg' },
+      { name:'Squat 5/3/1',                 muscles:['quads','glutes'], sets:3, reps:'per 5/3/1 cycle' },
+      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'], sets:3, reps:'8-10' },
+      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3, reps:'10/leg' },
+      { name:'Leg Extension',               muscles:['quads'], sets:3, reps:'12-15' },
+      { name:'Seated Leg Curl',             muscles:['hamstrings'], sets:3, reps:'10-12' },
+      { name:'Hip Thrust',                  muscles:['glutes'], sets:3, reps:'8-12' },
+      { name:'Standing Calf Raise',         muscles:['calves'], sets:4, reps:'12-15' },
     ]
   },
   legs_plyo_reactive: {
     id:'legs_plyo_reactive', name:'Legs + Plyo (Reactive · wk 5-6)', type:'legs', color:'#a06bff',
     exercises:[
-      { name:'Depth Jumps 12" (plyo)',      muscles:[], sets:3 },
-      { name:'Max Box Jumps (plyo)',        muscles:[], sets:4 },
-      { name:'Hurdle Hops (plyo)',          muscles:[], sets:3 },
-      { name:'Squat 5/3/1',                 muscles:['quads','glutes'], sets:3 },
-      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'], sets:3 },
-      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3 },
-      { name:'Seated Leg Curl',             muscles:['hamstrings'], sets:3 },
-      { name:'Hip Thrust',                  muscles:['glutes'], sets:3 },
-      { name:'Standing Calf Raise',         muscles:['calves'], sets:4 },
+      { name:'Depth Jumps 12" (plyo)',      muscles:[], sets:3, reps:'3' },
+      { name:'Max Box Jumps (plyo)',        muscles:[], sets:4, reps:'2' },
+      { name:'Hurdle Hops (plyo)',          muscles:[], sets:3, reps:'5' },
+      { name:'Squat 5/3/1',                 muscles:['quads','glutes'], sets:3, reps:'per 5/3/1 cycle' },
+      { name:'Romanian Deadlift',           muscles:['hamstrings','glutes'], sets:3, reps:'8-10' },
+      { name:'Bulgarian Split Squat',       muscles:['quads','glutes','hamstrings'], sets:3, reps:'10/leg' },
+      { name:'Seated Leg Curl',             muscles:['hamstrings'], sets:3, reps:'10-12' },
+      { name:'Hip Thrust',                  muscles:['glutes'], sets:3, reps:'8-12' },
+      { name:'Standing Calf Raise',         muscles:['calves'], sets:4, reps:'12-15' },
     ]
   },
   plyo_foundation: {
     id:'plyo_foundation', name:'Plyo only — Foundation', type:'plyo', color:'#ff7aff',
     exercises:[
-      { name:'Pogo Jumps (plyo)',           muscles:['calves'], sets:2 },
-      { name:'Box Jumps 12-18" (plyo)',     muscles:[],         sets:3 },
-      { name:'Broad Jumps (plyo)',          muscles:[],         sets:3 },
+      { name:'Pogo Jumps (plyo)',           muscles:['calves'], sets:2, reps:'10' },
+      { name:'Box Jumps 12-18" (plyo)',     muscles:[],         sets:3, reps:'3' },
+      { name:'Broad Jumps (plyo)',          muscles:[],         sets:3, reps:'4' },
     ]
   },
   plyo_power: {
     id:'plyo_power', name:'Plyo only — Power', type:'plyo', color:'#ff7aff',
     exercises:[
-      { name:'Box Jumps 24" (plyo)',        muscles:[], sets:4 },
-      { name:'Broad Jumps (plyo)',          muscles:[], sets:3 },
-      { name:'Single-Leg Bounds (plyo)',    muscles:[], sets:2 },
+      { name:'Box Jumps 24" (plyo)',        muscles:[], sets:4, reps:'3' },
+      { name:'Broad Jumps (plyo)',          muscles:[], sets:3, reps:'4' },
+      { name:'Single-Leg Bounds (plyo)',    muscles:[], sets:2, reps:'6/leg' },
     ]
   },
   plyo_reactive: {
     id:'plyo_reactive', name:'Plyo only — Reactive', type:'plyo', color:'#ff7aff',
     exercises:[
-      { name:'Depth Jumps 12" (plyo)',      muscles:[], sets:3 },
-      { name:'Max Box Jumps (plyo)',        muscles:[], sets:4 },
-      { name:'Hurdle Hops (plyo)',          muscles:[], sets:3 },
+      { name:'Depth Jumps 12" (plyo)',      muscles:[], sets:3, reps:'3' },
+      { name:'Max Box Jumps (plyo)',        muscles:[], sets:4, reps:'2' },
+      { name:'Hurdle Hops (plyo)',          muscles:[], sets:3, reps:'5' },
     ]
   },
 };
@@ -2545,11 +2557,12 @@ function renderNextWorkout() {
     const muscleLabel = ex.muscles.length
       ? `<span class="nw-ex-muscles">· ${ex.muscles.map(m => RP_VOL[m]?.label || m).join(', ')}</span>`
       : '';
+    const repsLabel = ex.reps ? `${ex.sets} × ${ex.reps}` : `${ex.sets} sets`;
     return `<div class="nw-exercise">
       <div class="nw-ex-top">
         <span class="nw-ex-num">${idx + 1}.</span>
         <span class="nw-ex-name">${ex.name}${muscleLabel}</span>
-        <span class="nw-ex-sets">${ex.sets} sets</span>
+        <span class="nw-ex-sets">${repsLabel}</span>
       </div>
       ${lastHtml}
     </div>`;
@@ -2641,10 +2654,12 @@ function renderPlanner() {
           const lastHtml = last
             ? `<div class="plan-ex-last">Last (${formatDateShort(last.date)}): ${formatLastSets(last.sets)}</div>`
             : `<div class="plan-ex-last empty">No prior log for this exercise</div>`;
+          const setsRepsLabel = ex.reps ? `${ex.sets} × ${ex.reps}` : `${ex.sets} sets`;
+          const muscleLabel = ex.muscles.length ? ' · ' + ex.muscles.map(m => RP_VOL[m]?.label || m).join(', ') : '';
           return `<li style="flex-direction:column;align-items:stretch">
             <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
               <span class="plan-ex-name">${ex.name}</span>
-              <span class="plan-ex-meta">${ex.sets} sets${ex.muscles.length ? ' · ' + ex.muscles.map(m => RP_VOL[m]?.label || m).join(', ') : ''}</span>
+              <span class="plan-ex-meta">${setsRepsLabel}${muscleLabel}</span>
             </div>
             ${lastHtml}
           </li>`;
@@ -3012,6 +3027,53 @@ function deleteSession(date, e) {
   saveData(data);
   renderLog();
   showToast('Session deleted');
+}
+
+function exportAllData() {
+  const data = loadData();
+  const payload = {
+    app: 'Forge Fitness Dashboard',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    data: data,
+  };
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `forge-backup-${today}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Backup downloaded');
+}
+
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const obj = JSON.parse(e.target.result);
+      // Accept either {data: {...}} (our export wrapper) or a raw data object
+      const data = obj.data || obj;
+      if (typeof data !== 'object' || data === null) throw new Error('Not a valid backup file');
+      if (!confirm(`Import this backup? This REPLACES all current data on this device.\n\nFile contents: ${(data.sessions || []).length} sessions, ${(data.bodyweight || []).length} weight entries, ${(data.plan || []).length} planned days.`)) {
+        event.target.value = ''; // reset input
+        return;
+      }
+      saveData(data);
+      showToast('Backup restored — reloading...');
+      setTimeout(() => location.reload(), 800);
+    } catch (err) {
+      showToast('Import failed: ' + err.message, true);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // allow re-selecting same file later
 }
 
 function clearAllData() {
