@@ -181,20 +181,17 @@ body {
 .chart-empty { text-align: center; padding: 40px; color: var(--text3); font-size: 13px; }
 
 /* HEATMAP */
-.heatmap-outer { overflow-x: auto; padding-bottom: 4px; }
-.heatmap-container { display: flex; gap: 3px; min-width: 600px; }
-.heatmap-week { display: flex; flex-direction: column; gap: 3px; }
-.heatmap-day-label { height: 14px; font-size: 9px; color: transparent; }
-.heatmap-day-label.show { color: var(--text3); }
-.heatmap-cell { width: 14px; height: 14px; border-radius: 2px; background: var(--surface2); cursor: default; transition: opacity 0.1s; }
+.heatmap-grid { display: flex; gap: 3px; }
+.heatmap-week { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; max-width: 28px; }
+.heatmap-cell { aspect-ratio: 1; border-radius: 2px; background: var(--surface2); cursor: default; transition: opacity 0.1s; }
 .heatmap-cell[title] { cursor: pointer; }
 .heatmap-cell:hover { opacity: 0.8; }
 .heatmap-cell.push  { background: rgba(232,255,107,0.55); }
 .heatmap-cell.pull  { background: rgba(107,255,213,0.55); }
 .heatmap-cell.legs  { background: rgba(160,107,255,0.55); }
 .heatmap-cell.mixed { background: rgba(255,107,107,0.5); }
-.heatmap-month-labels { display: flex; gap: 3px; min-width: 600px; margin-bottom: 3px; }
-.heatmap-month-label { font-size: 9px; color: var(--text3); }
+.heatmap-month-labels { display: flex; gap: 3px; margin-bottom: 4px; }
+.heatmap-month-label { flex: 1; max-width: 28px; min-width: 0; font-size: 10px; color: var(--text3); white-space: nowrap; overflow: visible; }
 
 /* RECOMMENDATIONS */
 .rec-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--rad); padding: 14px 16px; margin-bottom: 10px; }
@@ -303,6 +300,30 @@ body {
 .ex-history-sets { color: var(--text); flex: 1; }
 .ex-empty-history { color: var(--text3); font-size: 11px; font-style: italic; }
 .ex-custom-flag { font-size: 9px; color: var(--accent4); text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 6px; background: rgba(160,107,255,0.1); border-radius: 4px; }
+
+/* LAST WORKOUT CARD */
+.lw-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.lw-header-left { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.lw-date { font-size: 14px; font-weight: 500; }
+.lw-days-since { font-size: 12px; color: var(--text3); }
+.lw-location { font-size: 11px; color: var(--text3); padding: 2px 8px; background: var(--surface2); border-radius: 99px; }
+.lw-exercises { font-size: 13px; }
+.lw-exercise { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed var(--border); gap: 14px; flex-wrap: wrap; }
+.lw-exercise:last-child { border-bottom: none; }
+.lw-exercise.skipped { opacity: 0.45; }
+.lw-ex-name { color: var(--text); font-weight: 500; min-width: 200px; flex: 1; }
+.lw-ex-sets { color: var(--text2); font-size: 12px; text-align: right; }
+.lw-ex-sets .w-val { color: var(--text); }
+.lw-empty { color: var(--text3); font-size: 13px; padding: 20px 0; text-align: center; }
 
 /* PLANNER */
 .plan-day {
@@ -418,20 +439,25 @@ body {
           <div class="stat-sub" id="ov-sessions-sub"></div>
         </div>
         <div class="stat-card c-teal">
-          <div class="stat-label">Sets (7d)</div>
-          <div class="stat-value" id="ov-sets">—</div>
-          <div class="stat-sub" id="ov-sets-sub"></div>
-        </div>
-        <div class="stat-card c-purple">
           <div class="stat-label">Bench top set</div>
           <div class="stat-value" id="ov-bench">—</div>
           <div class="stat-sub" id="ov-bench-sub"></div>
         </div>
-        <div class="stat-card c-red">
-          <div class="stat-label">Days since last</div>
-          <div class="stat-value" id="ov-rest">—</div>
-          <div class="stat-sub" id="ov-rest-sub"></div>
+        <div class="stat-card c-purple">
+          <div class="stat-label">Squat top set</div>
+          <div class="stat-value" id="ov-squat">—</div>
+          <div class="stat-sub" id="ov-squat-sub"></div>
         </div>
+        <div class="stat-card c-red">
+          <div class="stat-label">Deadlift top set</div>
+          <div class="stat-value" id="ov-dead">—</div>
+          <div class="stat-sub" id="ov-dead-sub"></div>
+        </div>
+      </div>
+
+      <div class="section-heading">Last workout</div>
+      <div class="card" style="margin-bottom:18px">
+        <div id="last-workout-content"></div>
       </div>
 
       <div class="section-heading">Rolling 7-day volume vs. RP landmarks</div>
@@ -1412,55 +1438,64 @@ function renderHeatmap() {
   for (const s of sessions) sessionMap[s.date] = s;
 
   const today = new Date();
-  // Start from Monday 16 weeks ago
-  const start = new Date(today);
-  start.setDate(today.getDate() - (16 * 7) + 1);
-  const dow = start.getDay(); // 0=Sun
-  start.setDate(start.getDate() - (dow === 0 ? 6 : dow - 1)); // back to Monday
+  today.setHours(0, 0, 0, 0);
 
-  const typeColor = { push: 'push', pull: 'pull', legs: 'legs', mixed: 'mixed' };
-  const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  // Find the Monday of the current week, then go back 15 more Mondays → 16 weeks total
+  const dow = today.getDay() === 0 ? 7 : today.getDay(); // Mon=1 ... Sun=7
+  const thisMonday = new Date(today);
+  thisMonday.setDate(today.getDate() - (dow - 1));
+  const start = new Date(thisMonday);
+  start.setDate(thisMonday.getDate() - 15 * 7);
 
-  let monthLabelsHtml = '<div class="heatmap-month-labels">';
-  let html = '<div class="heatmap-container">';
-  let lastMonth = -1;
-
+  // Build week objects up front so labels and cells stay in lockstep
+  const weeks = [];
   const cur = new Date(start);
-  for (let week = 0; week < 16; week++) {
-    let weekHtml = '<div class="heatmap-week">';
-    for (let day = 0; day < 7; day++) {
+  for (let w = 0; w < 16; w++) {
+    const weekStart = new Date(cur);
+    const days = [];
+    for (let d = 0; d < 7; d++) {
       const dateStr = cur.toISOString().split('T')[0];
-      const s = sessionMap[dateStr];
-      const isFuture = cur > today;
-      let cls = '';
-      let titleAttr = '';
-
-      if (s && !isFuture) {
-        const type = detectSessionType(s);
-        cls = typeColor[type] || '';
-        titleAttr = `title="${formatDateShort(dateStr)} — ${type.charAt(0).toUpperCase()+type.slice(1)}"`;
-      }
-
-      weekHtml += `<div class="heatmap-cell ${cls}" ${titleAttr} style="${isFuture ? 'opacity:0.3' : ''}"></div>`;
+      days.push({ date: dateStr, session: sessionMap[dateStr], isFuture: cur > today });
       cur.setDate(cur.getDate() + 1);
     }
-    weekHtml += '</div>';
-    html += weekHtml;
+    weeks.push({ start: weekStart, days });
+  }
 
-    const wkDate = new Date(cur);
-    wkDate.setDate(wkDate.getDate() - 7);
-    const month = wkDate.getMonth();
-    if (month !== lastMonth) {
-      monthLabelsHtml += `<div class="heatmap-month-label" style="flex:1;min-width:17px">${wkDate.toLocaleDateString('en-US',{month:'short'})}</div>`;
-      lastMonth = month;
+  // Month labels — one slot per week, label text only on the first week of each month
+  let monthLabelsHtml = '';
+  let lastMonth = -1;
+  for (const w of weeks) {
+    const m = w.start.getMonth();
+    if (m !== lastMonth) {
+      monthLabelsHtml += `<div class="heatmap-month-label">${w.start.toLocaleDateString('en-US',{month:'short'})}</div>`;
+      lastMonth = m;
     } else {
-      monthLabelsHtml += `<div class="heatmap-month-label" style="flex:1"></div>`;
+      monthLabelsHtml += `<div class="heatmap-month-label"></div>`;
     }
   }
 
-  html += '</div>';
-  monthLabelsHtml += '</div>';
-  container.innerHTML = monthLabelsHtml + html;
+  // Cell grid
+  const typeClass = { push:'push', pull:'pull', legs:'legs', mixed:'mixed' };
+  let gridHtml = '';
+  for (const w of weeks) {
+    let weekHtml = '<div class="heatmap-week">';
+    for (const day of w.days) {
+      let cls = '', titleAttr = '';
+      if (day.session && !day.isFuture) {
+        const type = detectSessionType(day.session);
+        cls = typeClass[type] || '';
+        titleAttr = `title="${formatDateShort(day.date)} — ${type.charAt(0).toUpperCase()+type.slice(1)}"`;
+      }
+      weekHtml += `<div class="heatmap-cell ${cls}" ${titleAttr} style="${day.isFuture ? 'opacity:0.2' : ''}"></div>`;
+    }
+    weekHtml += '</div>';
+    gridHtml += weekHtml;
+  }
+
+  container.innerHTML = `
+    <div class="heatmap-month-labels">${monthLabelsHtml}</div>
+    <div class="heatmap-grid">${gridHtml}</div>
+  `;
 }
 
 // ─── RENDER: STRENGTH CHART ──────────────────────────────────────────────────
@@ -1711,52 +1746,29 @@ function renderRecs(type) {
 
 function renderOverview() {
   const sessions = getSessions();
-  const vol = getRollingVolume(7);
   const today = new Date();
-  const cutoff7 = new Date(); cutoff7.setDate(today.getDate() - 7);
+  today.setHours(0, 0, 0, 0);
+  const cutoff7 = new Date(today); cutoff7.setDate(today.getDate() - 7);
 
   const recent = sessions.filter(s => new Date(s.date + 'T12:00:00') >= cutoff7);
-  const totalSets = recent.reduce((sum, s) =>
-    sum + s.exercises.reduce((sum2, e) => sum2 + e.sets.filter(x => !x.skipped).length, 0), 0);
 
-  // Sessions this rolling 7 days
+  // Sessions in last 7 days
   const ov = document.getElementById('ov-sessions');
   if (ov) ov.textContent = recent.length;
   const ovSub = document.getElementById('ov-sessions-sub');
   if (ovSub) ovSub.textContent = recent.length ? `Last: ${formatDateShort(recent[0].date)}` : 'No sessions yet';
 
-  const ovSets = document.getElementById('ov-sets');
-  if (ovSets) ovSets.textContent = totalSets;
-  const ovSetsSub = document.getElementById('ov-sets-sub');
-  if (ovSetsSub && recent.length) ovSetsSub.textContent = `~${Math.round(totalSets / recent.length)} per session avg`;
-
-  // Bench top set
-  const benchHistory = getStrengthHistory('bench');
-  const lastBench = benchHistory.length ? benchHistory[benchHistory.length - 1] : null;
-  const ovBench = document.getElementById('ov-bench');
-  if (ovBench) {
-    ovBench.innerHTML = lastBench
-      ? `${lastBench.weight}<span class="stat-unit">lb</span>`
-      : '—';
-  }
-  const ovBenchSub = document.getElementById('ov-bench-sub');
-  if (ovBenchSub && lastBench) ovBenchSub.textContent = `${lastBench.reps} reps · ${formatDateShort(lastBench.date)}`;
-
-  // Days since last session
-  const ovRest = document.getElementById('ov-rest');
-  const ovRestSub = document.getElementById('ov-rest-sub');
-  if (sessions.length && ovRest) {
-    const last = new Date(sessions[0].date + 'T12:00:00');
-    const daysSince = Math.floor((today - last) / 86400000);
-    ovRest.textContent = daysSince;
-    if (ovRestSub) ovRestSub.textContent = daysSince === 0 ? 'Trained today!' : daysSince === 1 ? 'Yesterday' : 'days ago';
-  } else if (ovRest) {
-    ovRest.textContent = '—';
-  }
+  // Main lift top sets — Bench, Squat, Deadlift
+  renderOverviewLiftStat('ov-bench', 'bench');
+  renderOverviewLiftStat('ov-squat', 'squat');
+  renderOverviewLiftStat('ov-dead',  'deadlift');
 
   // Profile sub
   const profileSub = document.getElementById('profile-sub');
   if (profileSub) profileSub.textContent = `${sessions.length} sessions logged`;
+
+  // Last workout details card
+  renderLastWorkout(sessions, today);
 
   // Volume bars
   renderVolumeBars('overview-vol-bars', Object.keys(RP_VOL));
@@ -1773,6 +1785,91 @@ function renderOverview() {
     const d7 = new Date(); d7.setDate(d7.getDate() - 7);
     sub.textContent = `Rolling 7-day snapshot · ${formatDateShort(d7.toISOString().split('T')[0])} → Today`;
   }
+}
+
+function renderOverviewLiftStat(id, liftKey) {
+  const valEl = document.getElementById(id);
+  const subEl = document.getElementById(id + '-sub');
+  if (!valEl) return;
+  const history = getStrengthHistory(liftKey);
+  if (!history.length) {
+    valEl.textContent = '—';
+    if (subEl) subEl.textContent = 'no data yet';
+    return;
+  }
+  // Highest top-set weight ever recorded for this lift
+  const best = history.reduce((m, h) => h.weight > m.weight ? h : m, history[0]);
+  // Most recent top set
+  const latest = history[history.length - 1];
+  valEl.innerHTML = `${best.weight}<span class="stat-unit">lb</span>`;
+  if (subEl) {
+    if (best.date === latest.date && best.weight === latest.weight) {
+      subEl.textContent = `${best.reps} reps · ${formatDateShort(best.date)} (PR)`;
+    } else {
+      subEl.textContent = `${best.reps} reps · ${formatDateShort(best.date)} · last: ${latest.weight}lb ${formatDateShort(latest.date)}`;
+    }
+  }
+}
+
+function renderLastWorkout(sessions, today) {
+  const el = document.getElementById('last-workout-content');
+  if (!el) return;
+  if (!sessions.length) {
+    el.innerHTML = '<div class="lw-empty">No workouts logged yet. Import sessions in the Workout Log to see your last session details.</div>';
+    return;
+  }
+  const last = sessions[0]; // sorted desc by date
+  const type = detectSessionType(last);
+  const typeColors = { push:'var(--accent)', pull:'var(--accent3)', legs:'var(--accent4)' };
+  const lastDate = new Date(last.date + 'T12:00:00');
+  const daysSince = Math.floor((today - lastDate) / 86400000);
+  const daysLabel = daysSince === 0 ? 'today' : daysSince === 1 ? 'yesterday' : `${daysSince} days ago`;
+
+  const validEx = last.exercises.filter(e => !e.isSkipped && e.sets.length > 0);
+  const totalSets = validEx.reduce((sum, e) => sum + e.sets.length, 0);
+
+  const exerciseListHtml = last.exercises.map(ex => {
+    const isSkipped = ex.isSkipped || ex.sets.length === 0;
+    if (isSkipped) {
+      return `<div class="lw-exercise skipped">
+        <span class="lw-ex-name">${ex.name}</span>
+        <span class="lw-ex-sets" style="font-style:italic">skipped</span>
+      </div>`;
+    }
+    // Group sets by weight so identical weights show as "145 lb × 5, 5, 2"
+    const grouped = {};
+    const order = [];
+    for (const s of ex.sets) {
+      const key = s.weightRaw || (s.weight != null ? String(s.weight) : '?');
+      if (!grouped[key]) { grouped[key] = []; order.push(key); }
+      grouped[key].push(s.reps);
+    }
+    const setsDisplay = order.map(k => {
+      const wLabel = k.includes('*') ? k.replace('*', '×')
+        : isNaN(parseFloat(k)) ? k
+        : `${k} lb`;
+      return `<span class="w-val">${wLabel}</span> × ${grouped[k].join(', ')}`;
+    }).join('  ·  ');
+    return `<div class="lw-exercise">
+      <span class="lw-ex-name">${ex.name}${ex.isSuperset ? ' <span style="color:var(--text3);font-size:10px">[SS]</span>' : ''}</span>
+      <span class="lw-ex-sets">${setsDisplay}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="lw-header">
+      <div class="lw-header-left">
+        <span class="day-tag" style="color:${typeColors[type] || 'var(--text2)'};font-size:14px">${type.toUpperCase()}</span>
+        <span class="lw-date">${formatDateShort(last.date)}</span>
+        <span class="lw-days-since">${daysLabel}</span>
+        ${last.location ? `<span class="lw-location">${last.location}</span>` : ''}
+      </div>
+      <div>
+        <span class="pill pill-gray">${validEx.length} ex · ${totalSets} sets</span>
+      </div>
+    </div>
+    <div class="lw-exercises">${exerciseListHtml}</div>
+  `;
 }
 
 function renderNextSession(sessions) {
