@@ -834,7 +834,8 @@ body {
           <p>Plan the next 7 days and see projected rolling volume</p>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost btn-sm" onclick="suggestPlannerWeek()">Auto-fill suggested week</button>
+          <button class="btn btn-ghost btn-sm" onclick="suggestPlannerWeek()" title="Fills empty days with the suggested routine. Preserves any days you've already planned.">Fill empty days</button>
+          <button class="btn btn-ghost btn-sm" onclick="resetPlannerWeek()" title="Wipe the next 7 days and apply the suggested routine fresh.">Reset week</button>
           <button class="btn btn-ghost btn-sm" style="color:var(--accent2)" onclick="clearPlan()">Clear plan</button>
         </div>
       </div>
@@ -1570,6 +1571,22 @@ function clearPlan() {
   showToast('Plan cleared');
 }
 
+function resetPlannerWeek() {
+  if (!confirm('Wipe planned workouts for the next 7 days and re-apply the suggested routine?')) return;
+  const data = loadData();
+  if (!data.plan) data.plan = [];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  // Remove next-7-day plans first, using same iso format as suggestPlannerWeek for consistency
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today); d.setDate(today.getDate() + i);
+    const iso = d.toISOString().split('T')[0];
+    const idx = data.plan.findIndex(p => p.date === iso);
+    if (idx >= 0) data.plan.splice(idx, 1);
+  }
+  saveData(data);
+  suggestPlannerWeek();
+}
+
 function suggestPlannerWeek() {
   // Suggested 4-day routine + 3x volleyball:
   //   Mon push_bench, Tue VB hard, Wed legs_plyo, Thu VB light, Fri pull_back,
@@ -1611,26 +1628,41 @@ function suggestPlannerWeek() {
   const map = {
     1: 'push_bench',       // Mon
     2: 'volleyball_hard',  // Tue
-    3: 'legs_plyo',        // Wed
+    3: 'pull_back',        // Wed — Pull moved here so legs aren't right after hard VB
     4: 'volleyball_light', // Thu
-    5: 'pull_back',        // Fri
-    6: nextSat,            // Sat (alternates)
+    5: 'legs_plyo',        // Fri — Legs moved here for 3 days recovery from Tue hard VB
+    6: nextSat,            // Sat (alternates Push B / Pull B)
     0: 'rest'              // Sun
   };
 
+  // Only fill days that are empty (no plan set, or 'none').
+  // This preserves any custom plans the user has already made — useful for missed-workout makeup.
+  let filled = 0, kept = 0;
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     const iso = d.toISOString().split('T')[0];
     const dow = d.getDay();
     const tmplId = map[dow];
-    const existing = data.plan.findIndex(p => p.date === iso);
-    if (existing >= 0) data.plan[existing].templateId = tmplId;
+    const existingIdx = data.plan.findIndex(p => p.date === iso);
+    const existingTmpl = existingIdx >= 0 ? data.plan[existingIdx].templateId : null;
+
+    if (existingTmpl && existingTmpl !== 'none') {
+      kept++;
+      continue;
+    }
+    if (existingIdx >= 0) data.plan[existingIdx].templateId = tmplId;
     else data.plan.push({ date: iso, templateId: tmplId });
+    filled++;
   }
   saveData(data);
   renderPlanner();
-  showToast(`Suggested week applied (Sat = ${nextSat === 'pull_deadlift' ? 'Deadlift' : 'OHP'})`);
+  const satLabel = nextSat === 'pull_deadlift' ? 'Sat = Deadlift' : 'Sat = OHP';
+  if (kept > 0) {
+    showToast(`Filled ${filled} empty day${filled !== 1 ? 's' : ''} · kept ${kept} existing (${satLabel})`);
+  } else {
+    showToast(`Suggested week applied (${satLabel})`);
+  }
 }
 
 function addSessions(newSessions) {
@@ -2727,15 +2759,27 @@ function renderRecs() {
           </tr>
         </thead>
         <tbody>
-          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Mon</td><td style="padding:10px 8px"><span class="day-tag" style="color:var(--accent);font-size:12px">PUSH A</span> · Bench day</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Light VB day — fresh enough to bench heavy</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Mon</td><td style="padding:10px 8px"><span class="day-tag" style="color:var(--accent);font-size:12px">PUSH A</span> · Bench day</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Fresh weekend recovery — best slot for heavy bench</td></tr>
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Tue</td><td style="padding:10px 8px;color:var(--text2)"><span style="color:#ff9a7a;font-size:11px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:0.08em">VOLLEYBALL</span> (hard) — no lift</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Hardest VB day — leg work would compound badly</td></tr>
-          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Wed</td><td style="padding:10px 8px"><span class="day-tag" style="color:var(--accent4);font-size:12px">LEGS + PLYO</span></td><td style="padding:10px 8px;color:var(--text2);font-size:12px">48h after hard VB and 48h before light VB — best CNS-fresh slot for legs &amp; plyo</td></tr>
-          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Thu</td><td style="padding:10px 8px;color:var(--text2)"><span style="color:#7ab8ff;font-size:11px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:0.08em">VOLLEYBALL</span> (light) — no lift</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Light VB acts as active recovery from Wed legs</td></tr>
-          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Fri</td><td style="padding:10px 8px"><span class="day-tag" style="color:var(--accent3);font-size:12px">PULL A</span> · Back focused</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Upper body — back/biceps fresh from Thu rest</td></tr>
-          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Sat</td><td style="padding:10px 8px"><span style="color:var(--accent);font-size:11px">Week A:</span> <span class="day-tag" style="color:var(--accent);font-size:12px">PUSH B</span> (OHP) <span style="color:var(--text3);margin:0 6px">|</span> <span style="color:var(--accent3);font-size:11px">Week B:</span> <span class="day-tag" style="color:var(--accent3);font-size:12px">PULL B</span> (Deadlift)</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Alternates weekly so each main lift gets its own day on a 2-week rotation</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Wed</td><td style="padding:10px 8px"><span class="day-tag" style="color:var(--accent3);font-size:12px">PULL A</span> · Back focused</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Upper body — back/biceps weren't taxed by Tue VB, so no overlap with sore legs</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Thu</td><td style="padding:10px 8px;color:var(--text2)"><span style="color:#7ab8ff;font-size:11px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:0.08em">VOLLEYBALL</span> (light) — no lift</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Light VB while legs continue to recover from Tue</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Fri</td><td style="padding:10px 8px"><span class="day-tag" style="color:var(--accent4);font-size:12px">LEGS + PLYO</span> <span style="color:var(--text3);font-size:11px">(default)</span></td><td style="padding:10px 8px;color:var(--text2);font-size:12px">3 days after hard Tue VB — peak leg recovery for heavy squat + plyo. <strong style="color:var(--text)">Flexible</strong>: Thu or Sat also valid (see flexibility note below)</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 8px;font-weight:600">Sat</td><td style="padding:10px 8px"><span style="color:var(--accent);font-size:11px">Week A:</span> <span class="day-tag" style="color:var(--accent);font-size:12px">PUSH B</span> (OHP) <span style="color:var(--text3);margin:0 6px">|</span> <span style="color:var(--accent3);font-size:11px">Week B:</span> <span class="day-tag" style="color:var(--accent3);font-size:12px">PULL B</span> (Deadlift)</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Alternates weekly. On Pull B weeks, trim Fri legs volume (skip RDL/leg curl) to manage hamstring overlap</td></tr>
           <tr><td style="padding:10px 8px;font-weight:600">Sun</td><td style="padding:10px 8px;color:var(--text2)">Rest or easy run</td><td style="padding:10px 8px;color:var(--text2);font-size:12px">Full recovery before Mon's bench session</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <div class="section-heading">Schedule flexibility — missed-workout makeups</div>
+    <div class="card" style="margin-bottom:24px">
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px">The schedule above is the <strong style="color:var(--text)">default</strong> — but real life happens. Here's what can shift without breaking the routine:</p>
+      <ul style="list-style:none;padding:0;font-size:13px;color:var(--text2);line-height:1.8">
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--accent4)">Legs day</strong> can land on <strong style="color:var(--text)">Thu, Fri, or Sat</strong>. The only hard rule is <strong style="color:var(--text)">at least 48h after Tue hard VB</strong>. Friday is best (72h post hard VB, 24h post light VB), but Thu works if you accept light VB the same day, and Sat works if you're willing to push Pull B / Push B to Sunday.</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--accent3)">Pull A</strong> can be Wed, Thu, or Fri — back/biceps don't conflict with anything volleyball does. If you miss Wednesday, shift it to Thursday (during light VB is fine).</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--accent)">Push A (Bench)</strong> wants freshness, so Monday is best. If you miss Monday, the next-best slot is Friday — but that displaces legs. Better: just skip Push A that week and pick it up next cycle (5/3/1 is forgiving).</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Lifting on light VB days</strong> (Mon, Thu) is fine — light VB barely fatigues you. Just don't stack legs the morning before evening VB if the VB session involves a lot of jumping.</li>
+        <li style="padding:6px 0"><strong style="color:var(--text)">The planner's "Fill empty days" button</strong> respects whatever you've already planned. Set the day you definitely want for a tough session (e.g., "Saturday legs this week because I'm traveling Friday"), then auto-fill the rest.</li>
+      </ul>
     </div>
 
     <div class="section-heading">Lifting sessions — exercise details &amp; rationale</div>
@@ -2803,7 +2847,8 @@ function renderRecs() {
     <div class="section-heading">Why this routine works for YOUR context</div>
     <div class="card" style="margin-bottom:14px">
       <ul style="list-style:none;padding:0;font-size:13px;color:var(--text2);line-height:1.8">
-        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Leg day is Wednesday</strong> — sits with 48h on either side of volleyball. Heavy squats Tuesday would compound with strenuous VB; doing them Thursday would torch you for Thu light VB.</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Leg day is Friday, not Wednesday</strong> — Tuesday's hard volleyball leaves legs fatigued through Wednesday (DOMS peak ~24-48h post). Friday is 3 full days after Tue VB, giving peak leg recovery for heavy squats + plyo. The earlier Wed-legs placement looked clean on paper but didn't survive contact with real soreness.</li>
+        <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Pull on Wednesday works fine after hard VB</strong> — back/biceps weren't loaded by volleyball, so an upper-body session has no overlap with sore legs.</li>
         <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Plyos before squats</strong> — RP and every plyo source agrees: maximum-intent jump work must happen when CNS is fresh. After 6 sets of squats, your jumps are garbage.</li>
         <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Volleyball IS leg + jump training</strong> — Tuesday strenuous VB gives you sport-specific reactive work, so programmed plyos stay capped at 1 session/week (foundation 40 contacts → reactive 45). More would be counterproductive.</li>
         <li style="padding:6px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text)">Biceps appear 3× per week</strong> — RP biceps article says 3–6 sessions/week and that back work alone isn\'t enough. Pull A has 2 bicep exercises, Push B / Pull B has hammer curls — 3 hits/week minimum.</li>
