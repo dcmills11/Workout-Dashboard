@@ -315,6 +315,55 @@ body {
 .ex-empty-history { color: var(--text3); font-size: 11px; font-style: italic; }
 .ex-custom-flag { font-size: 9px; color: var(--accent4); text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 6px; background: rgba(160,107,255,0.1); border-radius: 4px; }
 
+/* MISSED WORKOUTS BANNER */
+.missed-banner { display: none; margin-bottom: 18px; }
+.missed-banner.show { display: block; }
+.missed-banner-inner {
+  background: rgba(255,107,107,0.04);
+  border: 1px solid rgba(255,107,107,0.18);
+  border-left: 3px solid var(--accent2);
+  border-radius: var(--rad-lg);
+  padding: 14px 18px;
+}
+.missed-banner-header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
+.missed-banner-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 12px; color: var(--accent2); text-transform: uppercase; letter-spacing: 0.1em; }
+.missed-banner-sub { font-size: 12px; color: var(--text2); }
+.missed-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--rad);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.missed-card:last-child { margin-bottom: 0; }
+.missed-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.missed-card-info { flex: 1; min-width: 200px; }
+.missed-card-date { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+.missed-card-name { font-weight: 600; font-size: 14px; margin-top: 3px; }
+.missed-card-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.missed-card-actions { display: flex; gap: 8px; }
+.missed-makeup { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.missed-makeup-prompt { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+.missed-makeup-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--rad);
+  cursor: pointer;
+  margin-bottom: 6px;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s;
+}
+.missed-makeup-option:last-child { margin-bottom: 0; }
+.missed-makeup-option:hover { border-color: var(--accent); background: rgba(232,255,107,0.04); }
+.missed-makeup-option.skip:hover { border-color: var(--text2); background: var(--surface2); color: var(--text3); }
+.missed-option-label { font-size: 13px; font-weight: 500; }
+.missed-option-why { font-size: 11px; color: var(--text3); margin-top: 3px; line-height: 1.5; }
+
 /* NEXT WORKOUT CARD (Planner page) */
 .next-workout-card {
   background: linear-gradient(180deg, var(--surface) 0%, rgba(232,255,107,0.025) 100%);
@@ -841,6 +890,8 @@ body {
       </div>
 
       <div id="planner-meso-bar"></div>
+
+      <div id="missed-banner" class="missed-banner"></div>
 
       <div id="next-workout-content"></div>
 
@@ -3258,6 +3309,201 @@ function toggleMuscle(key, muscle) {
 
 // ─── RENDER: PLANNER ─────────────────────────────────────────────────────────
 
+// ─── MISSED WORKOUTS ─────────────────────────────────────────────────────────
+// In-memory store for makeup option arrays, keyed by missed-workout date.
+// Re-built each render; click handlers read from here by date.
+const _makeupOptionsCache = {};
+
+function getMissedPlannedWorkouts() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const cutoff = new Date(today); cutoff.setDate(today.getDate() - 14); // only look back 14 days
+  const todayStr = today.toISOString().split('T')[0];
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+
+  const sessionMap = getSessionMap();
+  const plans = getPlans();
+  const liftingTypes = new Set(['push','pull','legs','plyo']);
+
+  const missed = [];
+  for (const p of plans) {
+    if (p.date >= todayStr) continue;       // not in the past
+    if (p.date < cutoffStr) continue;       // too old
+    if (p.skipped) continue;                // user already marked as skipped
+    if (sessionMap[p.date]) continue;       // session was logged for that date
+    const tmpl = WORKOUT_TEMPLATES[p.templateId];
+    if (!tmpl || !liftingTypes.has(tmpl.type)) continue; // only flag actual lifting sessions
+    missed.push({ date: p.date, templateId: p.templateId, template: tmpl });
+  }
+  missed.sort((a, b) => b.date.localeCompare(a.date));
+  return missed;
+}
+
+function computeMakeupOptions(missedDate, templateId) {
+  const tmpl = WORKOUT_TEMPLATES[templateId];
+  if (!tmpl) return [];
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const plans = getPlans();
+  const planMap = {};
+  for (const p of plans) planMap[p.date] = p;
+
+  const candidates = [];
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today); d.setDate(today.getDate() + i);
+    const iso = d.toISOString().split('T')[0];
+    if (iso === missedDate) continue;
+
+    const existing = planMap[iso];
+    const existingId = existing && existing.templateId !== 'none' ? existing.templateId : null;
+    const existingTmpl = existingId ? WORKOUT_TEMPLATES[existingId] : null;
+    const dateDisplay = formatDateShort(iso);
+
+    if (!existingId) {
+      candidates.push({
+        action: 'place',
+        targetDate: iso,
+        rank: 1,
+        label: `Move to ${dateDisplay} (empty slot)`,
+        rationale: `${dateDisplay} has no plan — drop ${tmpl.name} in there. Nothing else displaced.`
+      });
+    } else if (existingId === 'rest') {
+      candidates.push({
+        action: 'place',
+        targetDate: iso,
+        rank: 3,
+        label: `Use ${dateDisplay} (rest day)`,
+        rationale: `Trade your rest day for ${tmpl.name}. You'll have no rest day this week.`
+      });
+    } else if (existingTmpl && existingTmpl.type === tmpl.type && existingId !== templateId) {
+      candidates.push({
+        action: 'place',
+        targetDate: iso,
+        rank: 2,
+        label: `Swap for ${existingTmpl.name} on ${dateDisplay}`,
+        rationale: `Skip ${existingTmpl.name} this week, do ${tmpl.name} instead — same workout category, balanced volume.`
+      });
+    }
+    // We don't suggest doubling up on lifting days or replacing volleyball/run slots
+  }
+
+  // Best 2 by rank (lower rank = better)
+  candidates.sort((a, b) => a.rank - b.rank || a.targetDate.localeCompare(b.targetDate));
+  const limited = candidates.slice(0, 2);
+
+  // Always add a skip option at the end
+  limited.push({
+    action: 'skip',
+    label: 'Skip without makeup',
+    rationale: `Accept the missed ${tmpl.name}. Volume will drop this week — pick up next cycle.`
+  });
+
+  return limited;
+}
+
+function markSkippedWithOptions(missedDate, templateId) {
+  const optsEl = document.getElementById(`missed-options-${missedDate}`);
+  if (!optsEl) return;
+  const options = computeMakeupOptions(missedDate, templateId);
+  _makeupOptionsCache[missedDate] = options;
+  optsEl.innerHTML = `<div class="missed-makeup">
+    <div class="missed-makeup-prompt">Where do you want to make this up?</div>
+    ${options.map((opt, i) => `<button class="missed-makeup-option ${opt.action === 'skip' ? 'skip' : ''}" onclick="applyMakeupOption('${missedDate}', ${i})">
+      <div class="missed-option-label">${opt.label}</div>
+      <div class="missed-option-why">${opt.rationale}</div>
+    </button>`).join('')}
+  </div>`;
+}
+
+function applyMakeupOption(missedDate, optIdx) {
+  const options = _makeupOptionsCache[missedDate];
+  if (!options || !options[optIdx]) return;
+  const opt = options[optIdx];
+
+  const data = loadData();
+  if (!data.plan) data.plan = [];
+
+  const missedPlan = data.plan.find(p => p.date === missedDate);
+  const missedTemplateId = missedPlan?.templateId;
+  if (!missedTemplateId) return;
+
+  // Mark original plan as skipped (so banner won't re-flag it)
+  if (missedPlan) missedPlan.skipped = true;
+
+  if (opt.action === 'place' && opt.targetDate) {
+    const targetExisting = data.plan.find(p => p.date === opt.targetDate);
+    if (targetExisting) {
+      targetExisting.templateId = missedTemplateId;
+      targetExisting.skipped = false;
+    } else {
+      data.plan.push({ date: opt.targetDate, templateId: missedTemplateId });
+    }
+  }
+
+  saveData(data);
+  renderPlanner();
+  showToast(opt.action === 'skip' ? 'Marked as skipped' : `Made up on ${formatDateShort(opt.targetDate)}`);
+}
+
+function logMissedWorkout(missedDate) {
+  // Navigate to Log → Import tab
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-log').classList.add('active');
+  const logBtn = Array.from(document.querySelectorAll('.nav-item')).find(b => b.textContent.includes('Workout Log'));
+  if (logBtn) logBtn.classList.add('active');
+  switchLogTab('import');
+
+  // Hint about the expected date
+  const feedback = document.getElementById('import-feedback');
+  if (feedback) {
+    feedback.className = 'import-feedback show success';
+    feedback.textContent = `Paste your workout from ${formatDateShort(missedDate)} below. The date in the paste will be auto-detected.`;
+  }
+  setTimeout(() => {
+    const ta = document.getElementById('paste-input');
+    if (ta) { ta.focus(); ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  }, 100);
+}
+
+function renderMissedBanner() {
+  const banner = document.getElementById('missed-banner');
+  if (!banner) return;
+  const missed = getMissedPlannedWorkouts();
+  if (!missed.length) {
+    banner.classList.remove('show');
+    banner.innerHTML = '';
+    return;
+  }
+
+  const cards = missed.map(m => {
+    const totalSets = m.template.exercises.reduce((sum, e) => sum + e.sets, 0);
+    return `<div class="missed-card">
+      <div class="missed-card-header">
+        <div class="missed-card-info">
+          <div class="missed-card-date">${formatDateShort(m.date)}</div>
+          <div class="missed-card-name">${m.template.name}</div>
+          <div class="missed-card-meta">${m.template.exercises.length} exercises · ${totalSets} sets planned</div>
+        </div>
+        <div class="missed-card-actions">
+          <button class="btn btn-primary btn-sm" onclick="logMissedWorkout('${m.date}')">Log it</button>
+          <button class="btn btn-ghost btn-sm" onclick="markSkippedWithOptions('${m.date}', '${m.templateId}')">Mark skipped</button>
+        </div>
+      </div>
+      <div id="missed-options-${m.date}"></div>
+    </div>`;
+  }).join('');
+
+  banner.classList.add('show');
+  banner.innerHTML = `<div class="missed-banner-inner">
+    <div class="missed-banner-header">
+      <span class="missed-banner-title">${missed.length} missed workout${missed.length === 1 ? '' : 's'}</span>
+      <span class="missed-banner-sub">Log them to track actual volume, or mark skipped to get makeup options</span>
+    </div>
+    ${cards}
+  </div>`;
+}
+
 function renderNextWorkout() {
   const el = document.getElementById('next-workout-content');
   if (!el) return;
@@ -3366,6 +3612,7 @@ function renderNextWorkout() {
 }
 
 function renderPlanner() {
+  renderMissedBanner();
   renderNextWorkout();
   renderMesoBar('planner-meso-bar');
 
