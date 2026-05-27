@@ -669,6 +669,67 @@ body {
 }
 .fab-badge.show { display: flex; }
 
+/* QUICK-LOG PREVIEW */
+.ql-preview {
+  margin-top: 4px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  background: rgba(107,255,213,0.04);
+  border: 1px solid rgba(107,255,213,0.18);
+  border-radius: var(--rad);
+}
+.ql-preview-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+.ql-preview-card { margin-bottom: 14px; }
+.ql-preview-card:last-child { margin-bottom: 0; }
+.ql-preview-date {
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 8px;
+  font-weight: 500;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--border);
+}
+.ql-preview-ex {
+  background: var(--surface);
+  padding: 8px 12px;
+  border-radius: var(--rad);
+  margin-bottom: 5px;
+}
+.ql-preview-ex:last-child { margin-bottom: 0; }
+.ql-preview-ex-name { font-weight: 500; color: var(--text); font-size: 13px; }
+.ql-preview-ex-sets { color: var(--text2); font-size: 12px; margin-top: 2px; }
+.ql-preview-ex-muscles { margin-top: 5px; display: flex; gap: 4px; flex-wrap: wrap; }
+.ql-preview-ex.no-muscles { border-left: 2px solid var(--accent2); padding-left: 10px; }
+.ql-preview-warn {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(255,107,107,0.06);
+  border: 1px solid rgba(255,107,107,0.2);
+  border-radius: var(--rad);
+  font-size: 12px;
+  color: var(--accent2);
+  line-height: 1.6;
+}
+.ql-preview-info {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--rad);
+  font-size: 12px;
+  color: var(--text3);
+  line-height: 1.6;
+  font-style: italic;
+}
+
 /* QUICK-LOG MODAL */
 .ql-context {
   background: var(--surface2);
@@ -1190,19 +1251,29 @@ body {
 
 <!-- QUICK LOG MODAL -->
 <div class="modal-overlay" id="quick-log-modal">
-  <div class="modal" style="width:560px">
+  <div class="modal" style="width:620px">
     <h2>Log a workout</h2>
     <div id="ql-context"></div>
-    <div class="form-group">
-      <label class="form-label">Paste from Google Sheets</label>
-      <textarea class="paste-area" id="ql-paste-input" placeholder="5/27/26&#10;Bench press 5/3/1&#9;145 (65)&#9;5&#9;170 (75)&#9;5&#9;190 (85)&#9;2&#10;..." style="min-height:140px"></textarea>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">
-        The parser auto-detects the date from the first row. Same format as the Workout Log import tab.
+    <div class="form-group" style="display:flex;gap:12px;align-items:flex-end">
+      <div style="flex:0 0 180px">
+        <label class="form-label">Date</label>
+        <input type="date" class="form-input" id="ql-date" oninput="updateQuickLogPreview()">
+      </div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.5;padding-bottom:11px">
+        Used if the paste doesn't include a date row.
       </div>
     </div>
+    <div class="form-group">
+      <label class="form-label">Paste from Google Sheets</label>
+      <textarea class="paste-area" id="ql-paste-input" oninput="updateQuickLogPreview()" placeholder="Bench press 5/3/1&#9;145&#9;5&#9;170&#9;5&#9;190&#9;2&#10;Incline DB Press&#9;2*40&#9;12&#9;10&#9;8&#10;..." style="min-height:120px"></textarea>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">
+        Tab-separated. Date row optional — falls back to the date above.
+      </div>
+    </div>
+    <div id="ql-preview"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('quick-log-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitQuickLog()">Save</button>
+      <button class="btn btn-primary" id="ql-save-btn" onclick="submitQuickLog()" disabled>Save</button>
     </div>
   </div>
 </div>
@@ -1898,8 +1969,12 @@ function parseExerciseName(nameCell, weightCell) {
   let s = nameCell.trim();
   const skipped = /\(skip(?:ped)?\)|(?:^|\s)skip(?:ped)?(?:\s|$)/i.test(s);
 
-  // Remove set notation like "3x8-10" or "4×6-8" from name
-  s = s.replace(/\s*\d+x\d+[-–]\d+/gi, '').replace(/\s*\(skip(?:ped)?\)\s*/gi, '').trim();
+  // Remove trailing set-rep annotations like "3x8-10", "3 × 6-10", "4×6-8", "2 × 12-15"
+  // Handles ASCII 'x', uppercase 'X', unicode '×', hyphen or en-dash, with or without spaces
+  s = s.replace(/\s*\d+\s*[xX×]\s*\d+(?:\s*[-–]\s*\d+)?\s*$/g, '')
+       .replace(/\s*\d+\s*[xX×]\s*\d+(?:\s*[-–]\s*\d+)?(?=\s+\()/g, '') // also strip if followed by a paren note
+       .replace(/\s*\(skip(?:ped)?\)\s*/gi, '')
+       .trim();
 
   // Does the weight cell have a parenthetical number? If so, name's parens = alternate exercise
   const weightHasAlt = /\(\s*[\d2]/.test(weightCell || '');
@@ -1969,7 +2044,7 @@ function parseExerciseRow(cells) {
   };
 }
 
-function parseGoogleSheetsPaste(text) {
+function parseGoogleSheetsPaste(text, defaultDate = null) {
   const lines = text.split(/\r?\n/);
   const sessions = [];
   let cur = null;
@@ -1990,6 +2065,11 @@ function parseGoogleSheetsPaste(text) {
       continue;
     }
 
+    // If we encounter an exercise row before any date row, lazily start a session using the defaultDate
+    if (!cur && defaultDate) {
+      cur = { date: defaultDate, location: null, exercises: [] };
+      supersetCountdown = 0;
+    }
     if (!cur) continue;
 
     // Superset marker
@@ -4272,17 +4352,91 @@ function openQuickLog() {
     ctx.innerHTML = rows ? `<div class="ql-context">${rows}</div>` : '';
   }
   document.getElementById('ql-paste-input').value = '';
+  document.getElementById('ql-preview').innerHTML = '';
+  document.getElementById('ql-save-btn').disabled = true;
+  // Default date input to today
+  const todayInput = new Date();
+  document.getElementById('ql-date').value = todayInput.toISOString().split('T')[0];
   document.getElementById('quick-log-modal').classList.add('open');
   setTimeout(() => document.getElementById('ql-paste-input').focus(), 100);
 }
 
+function updateQuickLogPreview() {
+  const raw = document.getElementById('ql-paste-input').value;
+  const date = document.getElementById('ql-date').value;
+  const preview = document.getElementById('ql-preview');
+  const saveBtn = document.getElementById('ql-save-btn');
+  if (!preview) return;
+
+  if (!raw.trim()) {
+    preview.innerHTML = '';
+    saveBtn.disabled = true;
+    return;
+  }
+
+  let sessions = [];
+  try {
+    sessions = parseGoogleSheetsPaste(raw, date);
+  } catch (e) {
+    preview.innerHTML = `<div class="ql-preview-warn">Parse error: ${e.message}</div>`;
+    saveBtn.disabled = true;
+    return;
+  }
+
+  if (!sessions.length) {
+    preview.innerHTML = `<div class="ql-preview-warn">Nothing parsed yet. Each line should be tab-separated: <code>exercise_name [tab] weight [tab] reps1 [tab] reps2...</code></div>`;
+    saveBtn.disabled = true;
+    return;
+  }
+
+  // Check for any session whose date already has a logged session (would overwrite)
+  const existingDates = new Set(getSessions().map(s => s.date));
+  const willOverwrite = sessions.filter(s => existingDates.has(s.date));
+
+  let html = '';
+  let unmappedCount = 0;
+  for (const s of sessions) {
+    const exHtml = s.exercises.map(ex => {
+      const setsDisplay = formatSetsDisplay(ex);
+      const muscles = resolveExerciseMuscles(ex.name, ex.muscles);
+      if (!muscles.length) unmappedCount++;
+      const muscleTags = muscles.length
+        ? muscles.map(m => `<span class="pill pill-gray" style="font-size:10px;padding:1px 6px">${RP_VOL[m]?.label || m}</span>`).join(' ')
+        : '<span style="color:var(--accent2);font-size:10px;font-style:italic">unmapped — no muscle group detected</span>';
+      const noMusclesCls = muscles.length ? '' : 'no-muscles';
+      return `<div class="ql-preview-ex ${noMusclesCls}">
+        <div class="ql-preview-ex-name">${ex.name}${ex.isSuperset ? ' <span style="color:var(--text3);font-size:10px">[SS]</span>' : ''}${ex.isSkipped ? ' <span style="color:var(--text3);font-size:10px">[skipped]</span>' : ''}</div>
+        <div class="ql-preview-ex-sets">${setsDisplay || '<span style="color:var(--text3);font-style:italic">no valid sets parsed</span>'}</div>
+        <div class="ql-preview-ex-muscles">${muscleTags}</div>
+      </div>`;
+    }).join('');
+    const totalSets = s.exercises.reduce((sum, e) => sum + e.sets.filter(x => !x.skipped && x.reps > 0).length, 0);
+    html += `<div class="ql-preview-card">
+      <div class="ql-preview-date">${formatDateShort(s.date)} · ${s.exercises.length} exercise${s.exercises.length === 1 ? '' : 's'} · ${totalSets} sets</div>
+      ${exHtml}
+    </div>`;
+  }
+
+  let notes = '';
+  if (willOverwrite.length) {
+    notes += `<div class="ql-preview-warn">⚠ ${willOverwrite.length === 1 ? 'A session' : 'Sessions'} for ${willOverwrite.map(s => formatDateShort(s.date)).join(', ')} ${willOverwrite.length === 1 ? 'already exists' : 'already exist'} — saving will replace ${willOverwrite.length === 1 ? 'it' : 'them'}.</div>`;
+  }
+  if (unmappedCount > 0) {
+    notes += `<div class="ql-preview-info">${unmappedCount} exercise${unmappedCount === 1 ? '' : 's'} couldn't be auto-mapped to muscles. ${unmappedCount === 1 ? 'It' : 'They'} will still be saved, but won't count toward volume bars. Edit muscle assignments in the Exercises tab after saving.</div>`;
+  }
+
+  preview.innerHTML = `<div class="ql-preview"><div class="ql-preview-title">Preview · check before saving</div>${html}</div>${notes}`;
+  saveBtn.disabled = false;
+}
+
 function submitQuickLog() {
   const raw = document.getElementById('ql-paste-input').value;
+  const date = document.getElementById('ql-date').value;
   if (!raw.trim()) { showToast('Paste your workout first', true); return; }
   try {
-    const sessions = parseGoogleSheetsPaste(raw);
-    if (!sessions.length) { showToast('No sessions found — check the format', true); return; }
-    const count = addSessions(sessions);
+    const sessions = parseGoogleSheetsPaste(raw, date);
+    if (!sessions.length) { showToast('Nothing to save — check the format', true); return; }
+    addSessions(sessions);
     closeModal('quick-log-modal');
     showToast(`Logged ${sessions.length} session${sessions.length === 1 ? '' : 's'}`);
     updateFabBadge();
