@@ -624,6 +624,76 @@ body {
 }
 .plan-toggle:hover { color: var(--accent); }
 
+/* FLOATING ACTION BUTTON (Quick Log) */
+.fab {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  font-size: 28px;
+  font-weight: 300;
+  cursor: pointer;
+  z-index: 90;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(232,255,107,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'DM Sans', sans-serif;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.fab:hover { transform: scale(1.05); background: #d4eb5f; box-shadow: 0 8px 24px rgba(232,255,107,0.3), 0 0 0 1px rgba(232,255,107,0.4); }
+.fab:active { transform: scale(0.97); }
+.fab-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: var(--accent2);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 99px;
+  padding: 2px 6px;
+  min-width: 20px;
+  height: 20px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  font-family: 'Syne', sans-serif;
+  letter-spacing: 0.02em;
+}
+.fab-badge.show { display: flex; }
+
+/* QUICK-LOG MODAL */
+.ql-context {
+  background: var(--surface2);
+  border-radius: var(--rad);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.7;
+}
+.ql-context-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 3px 0; }
+.ql-context-row strong { color: var(--text); }
+.ql-context-row.missed strong { color: var(--accent2); }
+.ql-context-empty { color: var(--text3); font-style: italic; }
+.ql-context-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  font-family: 'DM Sans', sans-serif;
+  text-decoration: underline;
+}
+
 /* TOAST */
 .toast { position: fixed; bottom: 24px; right: 24px; z-index: 300; background: var(--accent); color: #0d0d0f; padding: 10px 16px; border-radius: var(--rad); font-size: 13px; font-weight: 600; transform: translateY(60px); opacity: 0; transition: all 0.25s cubic-bezier(0.4,0,0.2,1); pointer-events: none; }
 .toast.show { transform: translateY(0); opacity: 1; }
@@ -1108,6 +1178,31 @@ body {
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('weight-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="submitWeight()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- FLOATING ACTION BUTTON: Quick Log -->
+<button class="fab" id="fab-quicklog" onclick="openQuickLog()" title="Log a workout">
+  +
+  <span class="fab-badge" id="fab-badge">0</span>
+</button>
+
+<!-- QUICK LOG MODAL -->
+<div class="modal-overlay" id="quick-log-modal">
+  <div class="modal" style="width:560px">
+    <h2>Log a workout</h2>
+    <div id="ql-context"></div>
+    <div class="form-group">
+      <label class="form-label">Paste from Google Sheets</label>
+      <textarea class="paste-area" id="ql-paste-input" placeholder="5/27/26&#10;Bench press 5/3/1&#9;145 (65)&#9;5&#9;170 (75)&#9;5&#9;190 (85)&#9;2&#10;..." style="min-height:140px"></textarea>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">
+        The parser auto-detects the date from the first row. Same format as the Workout Log import tab.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('quick-log-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitQuickLog()">Save</button>
     </div>
   </div>
 </div>
@@ -3982,6 +4077,7 @@ function showPage(name, btn) {
   if (name === 'planner')   renderPlanner();
   if (name === 'exercises') renderExercises();
   if (name === 'bodycomp')  renderBodyComp();
+  updateFabBadge();
 }
 
 function switchLogTab(tab) {
@@ -4135,6 +4231,85 @@ function submitWeight() {
   showToast('Weight logged');
 }
 
+// ─── FLOATING ACTION BUTTON · QUICK LOG ──────────────────────────────────────
+function openQuickLog() {
+  const ctx = document.getElementById('ql-context');
+  if (ctx) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+    const yest = new Date(today); yest.setDate(today.getDate() - 1);
+    const yestStr = yest.toISOString().split('T')[0];
+
+    const plans = getPlans();
+    const sessionMap = getSessionMap();
+    const todayPlan = plans.find(p => p.date === todayStr);
+    const yestPlan = plans.find(p => p.date === yestStr);
+    const todayTmpl = todayPlan ? WORKOUT_TEMPLATES[todayPlan.templateId] : null;
+    const yestTmpl = yestPlan ? WORKOUT_TEMPLATES[yestPlan.templateId] : null;
+    const liftingTypes = new Set(['push','pull','legs','plyo']);
+
+    const missed = getMissedPlannedWorkouts();
+    const missedCount = missed.length;
+
+    let rows = '';
+    if (todayTmpl) {
+      const done = !!sessionMap[todayStr];
+      rows += `<div class="ql-context-row"><span>Today (${formatDateShort(todayStr)})</span><span><strong>${todayTmpl.name}</strong>${done ? ' · <span style="color:var(--accent3)">✓ logged</span>' : ' · <span style="color:var(--text3)">not logged yet</span>'}</span></div>`;
+    } else {
+      rows += `<div class="ql-context-row"><span>Today</span><span class="ql-context-empty">No plan set</span></div>`;
+    }
+    if (yestTmpl && liftingTypes.has(yestTmpl.type)) {
+      const done = !!sessionMap[yestStr];
+      const cls = (!done && !yestPlan.skipped) ? 'missed' : '';
+      const status = done ? ' · <span style="color:var(--accent3)">✓ logged</span>'
+        : yestPlan.skipped ? ' · <span style="color:var(--text3)">skipped</span>'
+        : ' · <strong>missed</strong>';
+      rows += `<div class="ql-context-row ${cls}"><span>Yesterday (${formatDateShort(yestStr)})</span><span>${yestTmpl.name}${status}</span></div>`;
+    }
+    if (missedCount > 0) {
+      rows += `<div class="ql-context-row"><span>Past 14 days</span><span><strong style="color:var(--accent2)">${missedCount}</strong> missed workout${missedCount === 1 ? '' : 's'} — <button class="ql-context-link" onclick="closeModal('quick-log-modal');showPage('planner',document.querySelector('.nav-item:first-of-type'))">view in Planner</button></span></div>`;
+    }
+    ctx.innerHTML = rows ? `<div class="ql-context">${rows}</div>` : '';
+  }
+  document.getElementById('ql-paste-input').value = '';
+  document.getElementById('quick-log-modal').classList.add('open');
+  setTimeout(() => document.getElementById('ql-paste-input').focus(), 100);
+}
+
+function submitQuickLog() {
+  const raw = document.getElementById('ql-paste-input').value;
+  if (!raw.trim()) { showToast('Paste your workout first', true); return; }
+  try {
+    const sessions = parseGoogleSheetsPaste(raw);
+    if (!sessions.length) { showToast('No sessions found — check the format', true); return; }
+    const count = addSessions(sessions);
+    closeModal('quick-log-modal');
+    showToast(`Logged ${sessions.length} session${sessions.length === 1 ? '' : 's'}`);
+    updateFabBadge();
+    // Refresh whatever page is active
+    const activePage = document.querySelector('.page.active')?.id;
+    if (activePage === 'page-planner')   renderPlanner();
+    else if (activePage === 'page-overview') renderOverview();
+    else if (activePage === 'page-log')      renderLog();
+    else if (activePage === 'page-volume')   { renderVolumeBars('vol-detail-bars', Object.keys(RP_VOL)); renderRPTable(); }
+    else if (activePage === 'page-strength') renderStrengthChart();
+    else if (activePage === 'page-exercises') renderExercises();
+    else if (activePage === 'page-recommend') renderRecs();
+    else if (activePage === 'page-bodycomp') renderBodyComp();
+  } catch (e) {
+    showToast('Parse error: ' + e.message, true);
+  }
+}
+
+function updateFabBadge() {
+  const badge = document.getElementById('fab-badge');
+  if (!badge) return;
+  const count = getMissedPlannedWorkouts().length;
+  badge.textContent = count;
+  if (count > 0) badge.classList.add('show');
+  else badge.classList.remove('show');
+}
+
 function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -4179,6 +4354,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Render initial page (Planner is the default landing tab)
   renderPlanner();
+  updateFabBadge();
 });
 </script>
 </body>
