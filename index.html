@@ -1353,16 +1353,36 @@ const TEMPLATE_ORDER = ['rest','volleyball_light','volleyball_hard','run','push_
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'forge_v2';
 
+// In-memory caches — invalidated on saveData() or invalidateCaches()
+// loadData() can be called hundreds of times per render; parsing a multi-MB JSON
+// blob each time made the Overview tab unresponsive once data grew past a year.
+let _dataCache = null;
+let _strengthCache = null;   // { liftKey: [history] }
+let _volumeCache = null;     // { days: vol }
+
+function invalidateCaches() {
+  _dataCache = null;
+  _strengthCache = null;
+  _volumeCache = null;
+}
+
 function loadData() {
+  if (_dataCache !== null) return _dataCache;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { sessions: [], bodyweight: [] };
-    return JSON.parse(raw);
-  } catch { return { sessions: [], bodyweight: [] }; }
+    _dataCache = raw ? JSON.parse(raw) : { sessions: [], bodyweight: [] };
+  } catch {
+    _dataCache = { sessions: [], bodyweight: [] };
+  }
+  return _dataCache;
 }
 
 function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  _dataCache = data;
+  // Any derived data based on sessions/overrides could be stale
+  _strengthCache = null;
+  _volumeCache = null;
 }
 
 function getSessions() { return loadData().sessions; }
@@ -1787,6 +1807,9 @@ function parseGoogleSheetsPaste(text) {
 // ─── VOLUME ENGINE ───────────────────────────────────────────────────────────
 
 function getRollingVolume(days = 7) {
+  if (!_volumeCache) _volumeCache = {};
+  if (_volumeCache[days]) return _volumeCache[days];
+
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   cutoff.setHours(0, 0, 0, 0);
@@ -1804,6 +1827,7 @@ function getRollingVolume(days = 7) {
       }
     }
   }
+  _volumeCache[days] = vol;
   return vol;
 }
 
@@ -1821,6 +1845,9 @@ function getVolumeStatus(muscle, sets) {
 // ─── STRENGTH ENGINE ─────────────────────────────────────────────────────────
 
 function getStrengthHistory(liftKey) {
+  if (!_strengthCache) _strengthCache = {};
+  if (_strengthCache[liftKey]) return _strengthCache[liftKey];
+
   const lift = MAIN_LIFTS.find(l => l.key === liftKey);
   if (!lift) return [];
   const history = [];
@@ -1836,10 +1863,12 @@ function getStrengthHistory(liftKey) {
   history.sort((a, b) => a.date.localeCompare(b.date));
   // Deduplicate by date (keep highest)
   const seen = {};
-  return history.filter(h => {
+  const result = history.filter(h => {
     if (!seen[h.date] || h.weight > seen[h.date]) { seen[h.date] = h.weight; return true; }
     return false;
   });
+  _strengthCache[liftKey] = result;
+  return result;
 }
 
 // ─── SESSION TYPE DETECTION ──────────────────────────────────────────────────
@@ -3734,6 +3763,7 @@ function handleImportFile(event) {
 function clearAllData() {
   if (!confirm('Delete ALL session data? This cannot be undone.')) return;
   localStorage.removeItem(STORAGE_KEY);
+  invalidateCaches();
   renderLog();
   renderOverview();
   showToast('All data cleared');
