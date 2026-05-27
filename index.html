@@ -578,6 +578,20 @@ body {
 .plan-day-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: -0.2px; }
 .plan-day-date { font-size: 12px; color: var(--text3); }
 .plan-day-pill { font-size: 10px; padding: 2px 8px; background: var(--accent); color: var(--bg); border-radius: 99px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.06em; }
+.plan-day-workout {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text2);
+}
+.plan-day-workout.t-push  { color: var(--accent); }
+.plan-day-workout.t-pull  { color: var(--accent3); }
+.plan-day-workout.t-legs  { color: var(--accent4); }
+.plan-day-workout.t-plyo  { color: #ff7aff; }
+.plan-day-workout.t-rest  { color: var(--text3); font-weight: 500; font-style: italic; }
+.plan-day-workout.t-vb,
+.plan-day-workout.t-run   { color: var(--text3); font-weight: 500; font-style: italic; }
 .plan-select {
   padding: 7px 12px;
   border-radius: var(--rad);
@@ -895,7 +909,10 @@ body {
 
       <div id="next-workout-content"></div>
 
-      <div class="section-heading">Projected rolling 7-day volume (already-done + planned)</div>
+      <div class="section-heading">Next 7 days</div>
+      <div id="planner-days"></div>
+
+      <div class="section-heading" style="margin-top:28px">Projected rolling 7-day volume (already-done + planned)</div>
       <div class="card" style="margin-bottom:18px">
         <div class="card-header">
           <div class="card-title">After completing planned workouts</div>
@@ -906,9 +923,6 @@ body {
         </div>
         <div id="plan-projection"></div>
       </div>
-
-      <div class="section-heading">Next 7 days</div>
-      <div id="planner-days"></div>
 
       <div class="section-heading" style="margin-top:24px">Plyometric block — 6-week vertical jump ramp</div>
       <div class="grid g-3">
@@ -3687,12 +3701,18 @@ function renderPlanner() {
       ? `<span style="font-size:10px;color:var(--accent4);padding:2px 6px;background:rgba(160,107,255,0.1);border-radius:4px">${tmpl.name}</span>`
       : '';
 
+    // Workout-name label on the left, color-coded by workout type
+    const workoutLabel = tmpl
+      ? `<span class="plan-day-workout t-${tmpl.type}">${tmpl.name}</span>`
+      : `<span class="plan-day-workout t-rest">— Not planned —</span>`;
+
     html += `<div class="plan-day ${isToday ? 'today' : ''}">
       <div class="plan-day-header">
         <div class="plan-day-left">
           <span class="plan-day-name">${dayNames[dow]}</span>
           <span class="plan-day-date">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
           ${isToday ? '<span class="plan-day-pill">Today</span>' : ''}
+          ${workoutLabel}
           ${rirPill}
           ${phaseNote}
         </div>
