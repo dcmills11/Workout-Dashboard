@@ -908,7 +908,7 @@ body {
       </div>
 
       <div class="ex-toolbar">
-        <input type="text" id="ex-search" class="form-input" placeholder="Search exercises..." oninput="renderExercises()" style="max-width:280px">
+        <input type="text" id="ex-search" class="form-input" placeholder="Search exercises..." oninput="debouncedRenderExercises()" style="max-width:280px">
         <select class="form-select" id="ex-sort" onchange="renderExercises()" style="max-width:180px">
           <option value="recent">Most recent first</option>
           <option value="frequent">Most frequent first</option>
@@ -1359,11 +1359,29 @@ const STORAGE_KEY = 'forge_v2';
 let _dataCache = null;
 let _strengthCache = null;   // { liftKey: [history] }
 let _volumeCache = null;     // { days: vol }
+let _sessionMapCache = null; // { 'YYYY-MM-DD': session }
+let _exerciseDataCache = null; // for Exercises tab
 
 function invalidateCaches() {
   _dataCache = null;
   _strengthCache = null;
   _volumeCache = null;
+  _sessionMapCache = null;
+  _exerciseDataCache = null;
+}
+
+// Fast local-date → 'YYYY-MM-DD' key. Avoids the overhead of toISOString()
+// which does UTC conversion + full timestamp serialization; called ~500x per render.
+function dateKey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function getSessionMap() {
+  if (_sessionMapCache) return _sessionMapCache;
+  const map = {};
+  for (const s of getSessions()) map[s.date] = s;
+  _sessionMapCache = map;
+  return map;
 }
 
 function loadData() {
@@ -1383,6 +1401,8 @@ function saveData(data) {
   // Any derived data based on sessions/overrides could be stale
   _strengthCache = null;
   _volumeCache = null;
+  _sessionMapCache = null;
+  _exerciseDataCache = null;
 }
 
 function getSessions() { return loadData().sessions; }
@@ -1874,6 +1894,8 @@ function getStrengthHistory(liftKey) {
 // ─── SESSION TYPE DETECTION ──────────────────────────────────────────────────
 
 function detectSessionType(session) {
+  // Memoize on the session object; cache is invalidated when saveData() replaces _dataCache
+  if (session.__type) return session.__type;
   const muscleVol = {};
   for (const ex of session.exercises) {
     if (ex.isSkipped) continue;
@@ -1884,9 +1906,12 @@ function detectSessionType(session) {
   const push = (muscleVol.chest || 0) + (muscleVol.triceps || 0) + (muscleVol.shoulders || 0);
   const pull = (muscleVol.back || 0) + (muscleVol.biceps || 0) + (muscleVol.reardelts || 0);
   const legs = (muscleVol.quads || 0) + (muscleVol.hamstrings || 0) + (muscleVol.glutes || 0) + (muscleVol.calves || 0);
-  if (legs > push && legs > pull) return 'legs';
-  if (pull > push) return 'pull';
-  return 'push';
+  let type;
+  if (legs > push && legs > pull) type = 'legs';
+  else if (pull > push) type = 'pull';
+  else type = 'push';
+  session.__type = type;
+  return type;
 }
 
 // ─── RENDER: VOLUME BARS ─────────────────────────────────────────────────────
@@ -1949,9 +1974,7 @@ function renderHeatmap() {
   const container = document.getElementById('heatmap-container');
   if (!container) return;
 
-  const sessions = getSessions();
-  const sessionMap = {};
-  for (const s of sessions) sessionMap[s.date] = s;
+  const sessionMap = getSessionMap();
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1970,8 +1993,8 @@ function renderHeatmap() {
     const weekStart = new Date(cur);
     const days = [];
     for (let d = 0; d < 7; d++) {
-      const dateStr = cur.toISOString().split('T')[0];
-      days.push({ date: dateStr, session: sessionMap[dateStr], isFuture: cur > today });
+      const ds = dateKey(cur);
+      days.push({ date: ds, session: sessionMap[ds], isFuture: cur > today });
       cur.setDate(cur.getDate() + 1);
     }
     weeks.push({ start: weekStart, days });
@@ -2054,9 +2077,7 @@ function renderYearlyHeatmap() {
   if (!el) return;
   const year = selectedHeatmapYear || new Date().getFullYear();
 
-  const sessions = getSessions();
-  const sessionMap = {};
-  for (const s of sessions) sessionMap[s.date] = s;
+  const sessionMap = getSessionMap();
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
@@ -2075,10 +2096,10 @@ function renderYearlyHeatmap() {
     const days = [];
     let anyInYear = false;
     for (let d = 0; d < 7; d++) {
-      const dateStr = cur.toISOString().split('T')[0];
+      const ds = dateKey(cur);
       const inYear = cur.getFullYear() === year;
       if (inYear) anyInYear = true;
-      days.push({ date: dateStr, session: sessionMap[dateStr], inYear, isFuture: cur > today });
+      days.push({ date: ds, session: sessionMap[ds], inYear, isFuture: cur > today });
       cur.setDate(cur.getDate() + 1);
     }
     weeks.push({ start: weekStart, days });
@@ -3008,7 +3029,16 @@ function renderNextSession(sessions) {
 // Track which exercises are in edit mode (in-memory only, not persisted)
 const editingExercises = new Set();
 
+// Debounce search input so the heavy card-list rebuild doesn't fire on every keystroke
+let _exSearchDebounce = null;
+function debouncedRenderExercises() {
+  clearTimeout(_exSearchDebounce);
+  _exSearchDebounce = setTimeout(renderExercises, 180);
+}
+
 function getAllExercisesData() {
+  if (_exerciseDataCache) return _exerciseDataCache;
+
   // Build a map of exerciseName -> { name, sessions: [{date, sets[]}], muscles, hasOverride }
   const map = {};
   const sessions = getSessions();
@@ -3038,7 +3068,8 @@ function getAllExercisesData() {
   for (const k in map) {
     map[k].history.sort((a, b) => b.date.localeCompare(a.date));
   }
-  return Object.values(map);
+  _exerciseDataCache = Object.values(map);
+  return _exerciseDataCache;
 }
 
 function renderExercises() {
