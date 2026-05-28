@@ -315,6 +315,53 @@ body {
 .ex-empty-history { color: var(--text3); font-size: 11px; font-style: italic; }
 .ex-custom-flag { font-size: 9px; color: var(--accent4); text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 6px; background: rgba(160,107,255,0.1); border-radius: 4px; }
 
+/* Variation chips on Exercises tab cards */
+.ex-variations { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.ex-variation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 10px;
+  background: rgba(160,107,255,0.08);
+  color: var(--accent4);
+  border: 1px solid rgba(160,107,255,0.25);
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.ex-variation-chip.no-var { background: var(--surface2); color: var(--text3); border-color: var(--border); font-style: italic; }
+.ex-variation-count { background: rgba(160,107,255,0.2); color: var(--accent4); padding: 1px 6px; border-radius: 99px; font-size: 10px; font-weight: 700; font-family: 'Syne', sans-serif; }
+.ex-variation-chip.no-var .ex-variation-count { background: var(--border); color: var(--text2); }
+.ex-history-var {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  background: rgba(160,107,255,0.08);
+  color: var(--accent4);
+  border-radius: 99px;
+  font-size: 9px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+/* Migration banner */
+.ex-migration-banner {
+  background: rgba(232,255,107,0.05);
+  border: 1px solid rgba(232,255,107,0.2);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--rad);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+
 /* MISSED WORKOUTS BANNER */
 .missed-banner { display: none; margin-bottom: 18px; }
 .missed-banner.show { display: block; }
@@ -753,6 +800,55 @@ body {
   letter-spacing: 0.02em;
 }
 .fab-badge.show { display: flex; }
+
+/* STRUCTURED EDIT FORM */
+.es-exercise {
+  background: var(--surface2);
+  border-radius: var(--rad);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+}
+.es-ex-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.es-ex-header input[type="text"] { font-size: 13px; }
+.es-ex-suggest {
+  font-size: 11px;
+  color: var(--accent3);
+  cursor: pointer;
+  border: 1px solid rgba(107,255,213,0.3);
+  padding: 4px 8px;
+  border-radius: var(--rad);
+  background: rgba(107,255,213,0.06);
+  font-family: 'DM Sans', sans-serif;
+}
+.es-ex-suggest:hover { background: rgba(107,255,213,0.15); border-color: var(--accent3); }
+.es-sets { display: flex; flex-direction: column; gap: 6px; padding-left: 8px; }
+.es-set { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.es-set-label { font-size: 11px; color: var(--text3); min-width: 50px; font-family: 'Syne', sans-serif; font-weight: 600; }
+.es-set input[type="text"], .es-set input[type="number"] { padding: 6px 10px; font-size: 13px; }
+.es-remove-btn {
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--rad);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  font-family: 'DM Sans', sans-serif;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.es-remove-btn:hover { color: var(--accent2); border-color: var(--accent2); }
+.es-add-set-btn { font-size: 11px; margin-top: 4px; align-self: flex-start; }
 
 /* QUICK-LOG PREVIEW */
 .ql-preview {
@@ -1261,6 +1357,33 @@ body {
     </div>
 
   </main>
+</div>
+
+<!-- STRUCTURED SESSION EDIT MODAL -->
+<div class="modal-overlay" id="edit-session-modal">
+  <div class="modal" style="width:720px;max-height:90vh;overflow-y:auto">
+    <h2>Edit workout</h2>
+    <div class="form-group" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div style="flex:0 0 180px">
+        <label class="form-label">Date</label>
+        <input type="date" class="form-input" id="es-date">
+      </div>
+      <div style="flex:1;min-width:160px">
+        <label class="form-label">Location (optional)</label>
+        <input type="text" class="form-input" id="es-location" placeholder="East, Adria, ...">
+      </div>
+    </div>
+    <div class="form-label" style="margin-bottom:10px">Exercises</div>
+    <div id="es-exercises"></div>
+    <button class="btn btn-ghost btn-sm" onclick="addEditExercise()" style="width:100%;margin-top:10px;border-style:dashed">+ Add exercise</button>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost" style="color:var(--accent2)" onclick="deleteEditingSession()">Delete session</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal('edit-session-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEditedSession()">Save changes</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- MESOCYCLE MODAL -->
@@ -1819,6 +1942,59 @@ function sessionToPasteFormat(session) {
 
 // Tracks the most recent variation suggestions shown in the quick-log preview
 let _qlVariationSuggestions = [];
+
+// Heuristic: does this parenthetical text look like a real exercise variation, or a note?
+// Used by the migration to safely split historical "Base (parens)" names into base + variation.
+function looksLikeVariation(text) {
+  if (!text) return false;
+  if (text.length > 30) return false;
+  // Disqualify if it contains note-like keywords
+  if (/\b(skip|skipped|missed|next|today|changed|max|min|increased|decreased|for next|this week|up next|tried|switched|moved|new|old|easy|hard|nice|good|bad|less|more|odd weights|east|west|home|gym)\b/i.test(text)) return false;
+  return true;
+}
+
+// Walk every session and split exercise names like "Lat Pulldown (close neutral)" into
+// base name + variation field. Only splits when the parens content looks like a variation
+// (not a freeform note). Idempotent — skips already-migrated entries.
+function migrateExerciseVariations() {
+  const data = loadData();
+  let migrated = 0;
+  for (const session of data.sessions) {
+    for (const ex of session.exercises) {
+      if (ex.variation !== undefined && ex.variation !== null) continue;
+      const m = (ex.name || '').match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+      if (!m) continue;
+      const variation = m[2].trim();
+      if (!looksLikeVariation(variation)) continue;
+      ex.name = m[1].trim();
+      ex.variation = variation;
+      migrated++;
+    }
+  }
+  saveData(data);
+  return migrated;
+}
+
+function countMigratableEntries() {
+  let n = 0;
+  for (const session of getSessions()) {
+    for (const ex of session.exercises) {
+      if (ex.variation !== undefined && ex.variation !== null) continue;
+      const m = (ex.name || '').match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+      if (m && looksLikeVariation(m[2].trim())) n++;
+    }
+  }
+  return n;
+}
+
+function runMigration() {
+  const n = countMigratableEntries();
+  if (n === 0) { showToast('Nothing to migrate — all exercise names are already in base + variation format'); return; }
+  if (!confirm(`Found ${n} exercise entr${n === 1 ? 'y' : 'ies'} with parens-in-name that look like variations. Split them into base + variation fields? (Names containing notes like "changed max" or "skipped" will be left alone.)`)) return;
+  const migrated = migrateExerciseVariations();
+  renderExercises();
+  showToast(`Migrated ${migrated} exercise entr${migrated === 1 ? 'y' : 'ies'}`);
+}
 
 function resolveExerciseMuscles(name, fallback) {
   const overrides = getMuscleOverrides();
@@ -3512,7 +3688,7 @@ function debouncedRenderExercises() {
 function getAllExercisesData() {
   if (_exerciseDataCache) return _exerciseDataCache;
 
-  // Build a map of exerciseName -> { name, sessions: [{date, sets[]}], muscles, hasOverride }
+  // Group by BASE exercise name (ex.name). Variations are tracked as a sub-list per base.
   const map = {};
   const sessions = getSessions();
   for (const s of sessions) {
@@ -3521,16 +3697,30 @@ function getAllExercisesData() {
       if (!map[key]) {
         map[key] = {
           name: ex.name,
+          variations: {},        // variationKey → { variation, count, lastDate }
           history: [],
           defaultMuscles: getExerciseMuscles(ex.name),
           muscles: resolveExerciseMuscles(ex.name, ex.muscles),
           hasOverride: hasOverride(ex.name),
         };
       }
+      const entry = map[key];
+
+      // Track variation aggregate
+      const varKey = ex.variation || '__none__';
+      if (!entry.variations[varKey]) {
+        entry.variations[varKey] = { variation: ex.variation || null, count: 0, lastDate: null };
+      }
+      entry.variations[varKey].count++;
+      if (!entry.variations[varKey].lastDate || s.date > entry.variations[varKey].lastDate) {
+        entry.variations[varKey].lastDate = s.date;
+      }
+
       const validSets = ex.sets.filter(set => !set.skipped && set.reps > 0);
       if (validSets.length === 0 && !ex.isSkipped) continue;
-      map[key].history.push({
+      entry.history.push({
         date: s.date,
+        variation: ex.variation || null,
         sets: validSets,
         skipped: ex.isSkipped,
         alternate: ex.alternate,
@@ -3582,12 +3772,23 @@ function renderExercises() {
     return bd.localeCompare(ad);
   });
 
+  // Migration banner if any sessions have paren-style names that could be split
+  const migratable = countMigratableEntries();
+  const migrationBanner = migratable > 0
+    ? `<div class="ex-migration-banner">
+        <div>
+          <strong>${migratable}</strong> exercise entr${migratable === 1 ? 'y has' : 'ies have'} parens-in-name that look like variations (e.g. "Lat Pulldown (close neutral)"). Split them into structured base + variation fields to consolidate grouping below.
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="runMigration()">Migrate variations</button>
+      </div>`
+    : '';
+
   if (!filtered.length) {
-    list.innerHTML = `<div class="empty-state"><h3>No exercises found</h3><p>${all.length === 0 ? 'Import sessions in the Workout Log to populate this list.' : 'Adjust search or filter.'}</p></div>`;
+    list.innerHTML = migrationBanner + `<div class="empty-state"><h3>No exercises found</h3><p>${all.length === 0 ? 'Import sessions in the Workout Log to populate this list.' : 'Adjust search or filter.'}</p></div>`;
     return;
   }
 
-  list.innerHTML = filtered.map(ex => renderExerciseCard(ex)).join('');
+  list.innerHTML = migrationBanner + filtered.map(ex => renderExerciseCard(ex)).join('');
 }
 
 function renderExerciseCard(ex) {
@@ -3621,13 +3822,23 @@ function renderExerciseCard(ex) {
     </div>`;
   }
 
-  // History rows
+  // Variation chips
+  const variations = Object.values(ex.variations || {}).sort((a, b) => b.count - a.count);
+  const hasMeaningfulVariations = variations.length > 1 || (variations.length === 1 && variations[0].variation);
+  const variationChipsHtml = hasMeaningfulVariations
+    ? `<div class="ex-variations">${variations.map(v =>
+        `<span class="ex-variation-chip ${v.variation ? '' : 'no-var'}">${v.variation || '(no variation)'} <span class="ex-variation-count">${v.count}</span></span>`
+      ).join('')}</div>`
+    : '';
+
+  // History rows — include the variation as a small inline tag
   const historyHtml = recent.length === 0
     ? '<div class="ex-empty-history">No completed sets logged</div>'
     : recent.map(h => {
+        const varTag = h.variation ? `<span class="ex-history-var">${h.variation}</span>` : '';
         if (h.skipped || h.sets.length === 0) {
           return `<div class="ex-history-row">
-            <span class="ex-history-date">${formatDateShort(h.date)}</span>
+            <span class="ex-history-date">${formatDateShort(h.date)}${varTag}</span>
             <span class="ex-history-sets" style="color:var(--text3);font-style:italic">skipped</span>
           </div>`;
         }
@@ -3643,16 +3854,17 @@ function renderExerciseCard(ex) {
           return `<span style="color:var(--text)">${wLabel}</span> × ${reps.join(', ')}`;
         }).join('  ·  ');
         return `<div class="ex-history-row">
-          <span class="ex-history-date">${formatDateShort(h.date)}</span>
+          <span class="ex-history-date">${formatDateShort(h.date)}${varTag}</span>
           <span class="ex-history-sets">${setsDisplay}</span>
         </div>`;
       }).join('');
 
   return `<div class="ex-card ${ex.hasOverride ? 'custom' : ''}">
     <div class="ex-card-header">
-      <div>
+      <div style="flex:1">
         <div class="ex-card-title">${ex.name}</div>
-        <div class="ex-card-meta">Done ${ex.history.length}× · last: ${lastDate ? formatDateShort(lastDate) : '—'}</div>
+        <div class="ex-card-meta">Done ${ex.history.length}× · last: ${lastDate ? formatDateShort(lastDate) : '—'}${hasMeaningfulVariations ? ` · ${variations.length} variation${variations.length === 1 ? '' : 's'}` : ''}</div>
+        ${variationChipsHtml}
       </div>
       ${musclesHtml}
     </div>
@@ -4791,12 +5003,177 @@ function openQuickLog() {
   setTimeout(() => document.getElementById('ql-paste-input').focus(), 100);
 }
 
-// Open quick-log with a session pre-filled (edit existing workout)
+// STRUCTURED EDIT FORM ────────────────────────────────────────────────────────
+let _editingSession = null;  // working copy of the session being edited
+
+// Replaces the old paste-based edit flow. Opens the structured form.
 function editSessionByDate(date) {
   const session = getSessionMap()[date];
   if (!session) { showToast('No session found for that date', true); return; }
-  openQuickLog._prefill = session;
-  openQuickLog();
+  // Deep-clone so cancel doesn't mutate live data
+  _editingSession = JSON.parse(JSON.stringify(session));
+  document.getElementById('es-date').value = _editingSession.date;
+  document.getElementById('es-location').value = _editingSession.location || '';
+  renderEditSessionExercises();
+  document.getElementById('edit-session-modal').classList.add('open');
+}
+
+function renderEditSessionExercises() {
+  const container = document.getElementById('es-exercises');
+  if (!container || !_editingSession) return;
+
+  if (!_editingSession.exercises.length) {
+    container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">No exercises yet — click "+ Add exercise" below.</div>`;
+    return;
+  }
+
+  container.innerHTML = _editingSession.exercises.map((ex, exIdx) => {
+    const setsHtml = (ex.sets || []).map((set, setIdx) => {
+      const weightVal = set.weightRaw ?? (set.weight != null ? String(set.weight) : '');
+      return `<div class="es-set" data-set-idx="${setIdx}">
+        <span class="es-set-label">Set ${setIdx + 1}</span>
+        <input type="text" class="form-input" placeholder="weight (e.g. 145 or 2*45)" value="${escapeHtml(weightVal)}" oninput="updateEditSet(${exIdx}, ${setIdx}, 'weight', this.value)" style="flex:0 0 140px">
+        <input type="number" class="form-input" placeholder="reps" value="${set.reps || ''}" oninput="updateEditSet(${exIdx}, ${setIdx}, 'reps', this.value)" style="flex:0 0 80px" min="0">
+        <button class="es-remove-btn" onclick="removeEditSet(${exIdx}, ${setIdx})" title="Remove set">×</button>
+      </div>`;
+    }).join('');
+
+    // Variation suggestion: if today's planned has a matching base + different variation
+    const suggestion = computeEditVariationSuggestion(ex);
+    const suggestBtn = suggestion
+      ? `<button class="es-ex-suggest" onclick="acceptEditVariationSuggestion(${exIdx}, '${escapeHtmlAttr(suggestion)}')">Suggest variation: "${escapeHtml(suggestion)}"</button>`
+      : '';
+
+    return `<div class="es-exercise">
+      <div class="es-ex-header">
+        <input type="text" class="form-input" placeholder="Exercise name (base)" value="${escapeHtml(ex.name || '')}" oninput="updateEditExerciseField(${exIdx}, 'name', this.value)" style="flex:1;min-width:160px">
+        <input type="text" class="form-input" placeholder="Variation (optional)" value="${escapeHtml(ex.variation || '')}" oninput="updateEditExerciseField(${exIdx}, 'variation', this.value)" style="flex:0 0 200px">
+        ${suggestBtn}
+        <button class="es-remove-btn" onclick="removeEditExercise(${exIdx})" title="Remove exercise">×</button>
+      </div>
+      <div class="es-sets">${setsHtml}</div>
+      <button class="btn btn-ghost btn-sm es-add-set-btn" onclick="addEditSet(${exIdx})">+ Set</button>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function escapeHtmlAttr(s) { return escapeHtml(s).replace(/'/g, '&#39;'); }
+
+function computeEditVariationSuggestion(ex) {
+  if (!ex.name) return null;
+  const plan = getPlans().find(p => p.date === _editingSession.date);
+  const tmpl = plan ? resolveTemplate(plan.templateId) : null;
+  if (!tmpl) return null;
+  const baseKey = normalizeExerciseName(ex.name);
+  const matched = tmpl.exercises.find(p => normalizeExerciseName(p.name) === baseKey);
+  if (!matched) return null;
+  const plannedVar = matched.variation || null;
+  if ((ex.variation || null) === plannedVar) return null;
+  return plannedVar || '';  // empty string means "remove variation"
+}
+
+function acceptEditVariationSuggestion(exIdx, suggestion) {
+  _editingSession.exercises[exIdx].variation = suggestion || null;
+  renderEditSessionExercises();
+}
+
+function updateEditExerciseField(exIdx, field, value) {
+  if (!_editingSession.exercises[exIdx]) return;
+  _editingSession.exercises[exIdx][field] = value === '' ? null : value;
+}
+
+function updateEditSet(exIdx, setIdx, field, value) {
+  const set = _editingSession.exercises[exIdx]?.sets?.[setIdx];
+  if (!set) return;
+  if (field === 'weight') {
+    set.weightRaw = value;
+    const n = parseFloat(String(value).replace(/^2\s*\*\s*/, ''));
+    set.weight = isNaN(n) ? null : n;
+    set.bilateral = /^2\s*\*/.test(String(value));
+  } else if (field === 'reps') {
+    set.reps = parseInt(value) || 0;
+  }
+}
+
+function addEditExercise() {
+  _editingSession.exercises.push({
+    name: '',
+    variation: null,
+    sets: [{ weight: null, weightRaw: '', reps: 0, skipped: false }],
+    muscles: [],
+    isSuperset: false,
+    isSkipped: false,
+    notes: [],
+  });
+  renderEditSessionExercises();
+}
+
+function removeEditExercise(idx) {
+  if (!confirm('Remove this exercise from the session?')) return;
+  _editingSession.exercises.splice(idx, 1);
+  renderEditSessionExercises();
+}
+
+function addEditSet(exIdx) {
+  const ex = _editingSession.exercises[exIdx];
+  if (!ex) return;
+  const lastSet = ex.sets[ex.sets.length - 1];
+  ex.sets.push({
+    weight: lastSet ? lastSet.weight : null,
+    weightRaw: lastSet ? lastSet.weightRaw : '',
+    bilateral: lastSet ? lastSet.bilateral : false,
+    reps: 0,
+    skipped: false,
+  });
+  renderEditSessionExercises();
+}
+
+function removeEditSet(exIdx, setIdx) {
+  const sets = _editingSession.exercises[exIdx]?.sets;
+  if (!sets) return;
+  sets.splice(setIdx, 1);
+  renderEditSessionExercises();
+}
+
+function saveEditedSession() {
+  if (!_editingSession) return;
+  // Sync date + location from inputs
+  _editingSession.date = document.getElementById('es-date').value;
+  _editingSession.location = document.getElementById('es-location').value.trim() || null;
+  if (!_editingSession.date) { showToast('Pick a date', true); return; }
+
+  // Re-resolve muscles for each exercise (in case names changed)
+  for (const ex of _editingSession.exercises) {
+    ex.muscles = getExerciseMuscles(ex.name);
+    // Drop empty sets (reps=0 and no weight)
+    ex.sets = (ex.sets || []).filter(s => s.reps > 0 || s.weight != null || (s.weightRaw && s.weightRaw.trim()));
+  }
+  // Drop exercises with empty names
+  _editingSession.exercises = _editingSession.exercises.filter(ex => ex.name && ex.name.trim());
+
+  addSessions([_editingSession]);
+  closeModal('edit-session-modal');
+  _editingSession = null;
+  renderPlanner();
+  updateFabBadge();
+  showToast('Session updated');
+}
+
+function deleteEditingSession() {
+  if (!_editingSession) return;
+  if (!confirm('Delete this entire session?')) return;
+  const date = _editingSession.date;
+  const data = loadData();
+  data.sessions = data.sessions.filter(s => s.date !== date);
+  saveData(data);
+  closeModal('edit-session-modal');
+  _editingSession = null;
+  renderPlanner();
+  updateFabBadge();
+  showToast('Session deleted');
 }
 
 function updateQuickLogPreview() {
