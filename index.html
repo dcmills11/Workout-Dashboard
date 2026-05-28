@@ -364,6 +364,49 @@ body {
 .missed-option-label { font-size: 13px; font-weight: 500; }
 .missed-option-why { font-size: 11px; color: var(--text3); margin-top: 3px; line-height: 1.5; }
 
+/* COMPLETED-TODAY CARD (variant of Next Workout) */
+.next-workout-card.completed {
+  background: linear-gradient(180deg, var(--surface) 0%, rgba(107,255,213,0.04) 100%);
+  border-left-color: var(--accent3);
+}
+.nw-section-label.completed { color: var(--accent3); }
+.cw-exercises { display: flex; flex-direction: column; gap: 8px; }
+.cw-exercise {
+  padding: 10px 14px;
+  background: var(--surface2);
+  border-radius: var(--rad);
+  border-left: 2px solid var(--border2);
+}
+.cw-exercise.hit     { border-left-color: var(--accent3); }
+.cw-exercise.partial { border-left-color: var(--accent); }
+.cw-exercise.miss    { border-left-color: var(--accent2); opacity: 0.75; }
+.cw-exercise.extra   { border-left-color: var(--accent4); }
+.cw-ex-top { display: flex; align-items: baseline; gap: 10px; }
+.cw-ex-num { color: var(--text3); font-family: 'Syne', sans-serif; font-weight: 700; font-size: 11px; min-width: 18px; }
+.cw-ex-name { flex: 1; font-size: 14px; font-weight: 500; }
+.cw-ex-muscles { font-size: 11px; color: var(--text3); font-weight: normal; margin-left: 6px; }
+.cw-ex-icon { font-size: 14px; font-weight: 700; }
+.cw-ex-icon.hit     { color: var(--accent3); }
+.cw-ex-icon.partial { color: var(--accent); }
+.cw-ex-icon.miss    { color: var(--accent2); }
+.cw-ex-row { font-size: 12px; padding-left: 28px; margin-top: 3px; }
+.cw-ex-row strong { color: var(--text3); font-weight: 500; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 6px; }
+.cw-ex-row.planned { color: var(--text2); }
+.cw-ex-row.actual  { color: var(--text); }
+.cw-ex-row.actual .delta { font-size: 11px; color: var(--accent2); margin-left: 6px; }
+.cw-peek-btn {
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: var(--rad);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
+}
+.cw-peek-btn:hover { color: var(--accent); border-color: var(--accent); }
+
 /* NEXT WORKOUT CARD (Planner page) */
 .next-workout-card {
   background: linear-gradient(180deg, var(--surface) 0%, rgba(232,255,107,0.025) 100%);
@@ -3693,21 +3736,41 @@ function renderMissedBanner() {
   </div>`;
 }
 
+// Toggle state for the Next Workout card: null = auto, 'completed' = force today, 'next' = force upcoming
+let _nextWorkoutMode = null;
+
+function toggleNextWorkoutView(mode) {
+  _nextWorkoutMode = mode;
+  renderNextWorkout();
+}
+
 function renderNextWorkout() {
   const el = document.getElementById('next-workout-content');
   if (!el) return;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
   const plans = getPlans();
+  const sessionMap = getSessionMap();
 
-  // Find the next planned workout in the next 7 days that's an actual lifting/plyo session
   const liftingTypes = new Set(['push','pull','legs','plyo']);
+
+  // Did today have a planned lift, and was it logged?
+  const todayPlan = plans.find(p => p.date === todayStr);
+  const todayTmpl = todayPlan ? resolveTemplate(todayPlan.templateId) : null;
+  const todayIsLiftDay = todayTmpl && liftingTypes.has(todayTmpl.type);
+  const todaySession = sessionMap[todayStr];
+  const todayCompleted = todayIsLiftDay && todaySession;
+
+  // Find next planned lifting workout (skip days that already have a logged session)
   let next = null;
-  for (let i = 0; i < 7; i++) {
+  const startI = todayCompleted ? 1 : 0;
+  for (let i = startI; i < 7; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     const iso = d.toISOString().split('T')[0];
+    if (sessionMap[iso]) continue; // already logged
     const plan = plans.find(p => p.date === iso);
     if (!plan || plan.templateId === 'none' || plan.templateId === 'rest') continue;
     const tmpl = resolveTemplate(plan.templateId);
@@ -3715,6 +3778,18 @@ function renderNextWorkout() {
     next = { date: iso, dateObj: d, daysAway: i, template: tmpl, originalTemplateId: plan.templateId };
     break;
   }
+
+  // Decide which view to render
+  // Default (auto): if today is completed, show completed view. Otherwise show upcoming.
+  // User can toggle via the peek buttons.
+  const effectiveMode = _nextWorkoutMode || (todayCompleted ? 'completed' : 'next');
+
+  if (effectiveMode === 'completed' && todayCompleted) {
+    renderTodayCompletedCard(el, todaySession, todayTmpl, next);
+    return;
+  }
+  // else fall through to render upcoming below — wraps the next-workout render
+  // If todayCompleted is true but mode is 'next', we'll add a back-to-today button
 
   if (!next) {
     el.innerHTML = `<div class="next-workout-card">
@@ -3779,6 +3854,10 @@ function renderNextWorkout() {
     .map(([m, c]) => `<span class="nw-muscle-pill">${RP_VOL[m]?.label || m} ${c}</span>`)
     .join('');
 
+  const backToTodayBtn = todayCompleted
+    ? `<button class="cw-peek-btn" onclick="toggleNextWorkoutView('completed')">← Back to today's completed</button>`
+    : '';
+
   el.innerHTML = `<div class="next-workout-card">
     <div class="nw-header">
       <div>
@@ -3793,10 +3872,121 @@ function renderNextWorkout() {
       <div class="nw-stats">
         ${rirHtml}
         <span class="pill pill-gray">${validEx} ex · ${totalSets} sets</span>
+        ${backToTodayBtn}
       </div>
     </div>
     <div class="nw-exercises">${exerciseHtml}</div>
     ${footerPills ? `<div class="nw-footer">${footerPills}</div>` : ''}
+  </div>`;
+}
+
+// Renders the "today's workout completed" view with planned vs actual comparison
+function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
+  // Build map of actual exercises by normalized name for matching
+  const actualByName = {};
+  const actualUnmatched = []; // exercises done that weren't planned
+  for (const ex of session.exercises) {
+    actualByName[normalizeExerciseName(ex.name)] = ex;
+  }
+
+  // For each planned exercise, find actual + classify
+  let totalPlannedSets = 0;
+  let totalSetsHit = 0;
+  const exerciseRows = plannedTmpl.exercises.map((plannedEx, idx) => {
+    totalPlannedSets += plannedEx.sets;
+    const key = normalizeExerciseName(plannedEx.name);
+    const actual = actualByName[key];
+    if (actual) delete actualByName[key]; // mark as matched
+
+    const muscleLabel = plannedEx.muscles.length
+      ? `<span class="cw-ex-muscles">· ${plannedEx.muscles.map(m => RP_VOL[m]?.label || m).join(', ')}</span>`
+      : '';
+    const planSummary = plannedEx.reps ? `${plannedEx.sets} × ${plannedEx.reps}` : `${plannedEx.sets} sets`;
+
+    if (!actual || actual.isSkipped) {
+      return `<div class="cw-exercise miss">
+        <div class="cw-ex-top">
+          <span class="cw-ex-num">${idx + 1}.</span>
+          <span class="cw-ex-name">${plannedEx.name}${muscleLabel}</span>
+          <span class="cw-ex-icon miss">✗</span>
+        </div>
+        <div class="cw-ex-row planned"><strong>Planned</strong>${planSummary}</div>
+        <div class="cw-ex-row actual"><strong>Done</strong><span style="color:var(--accent2);font-style:italic">not logged / skipped</span></div>
+      </div>`;
+    }
+
+    const validSets = actual.sets.filter(s => !s.skipped && s.reps > 0);
+    const setsHit = validSets.length;
+    totalSetsHit += Math.min(setsHit, plannedEx.sets);
+    const setsDisplay = formatSetsDisplay(actual);
+
+    let cls, icon;
+    if (setsHit >= plannedEx.sets) { cls = 'hit'; icon = '✓'; }
+    else if (setsHit > 0)          { cls = 'partial'; icon = '◐'; }
+    else                            { cls = 'miss'; icon = '✗'; }
+
+    const setsDelta = setsHit < plannedEx.sets
+      ? `<span class="delta">(${setsHit}/${plannedEx.sets} sets)</span>`
+      : '';
+
+    return `<div class="cw-exercise ${cls}">
+      <div class="cw-ex-top">
+        <span class="cw-ex-num">${idx + 1}.</span>
+        <span class="cw-ex-name">${plannedEx.name}${muscleLabel}</span>
+        <span class="cw-ex-icon ${cls}">${icon}</span>
+      </div>
+      <div class="cw-ex-row planned"><strong>Planned</strong>${planSummary}</div>
+      <div class="cw-ex-row actual"><strong>Done</strong>${setsDisplay}${setsDelta}</div>
+    </div>`;
+  }).join('');
+
+  // Extras: actual exercises that weren't in the plan
+  const extras = Object.values(actualByName).filter(ex => !ex.isSkipped && ex.sets.length > 0);
+  const extrasHtml = extras.map(ex => {
+    const setsDisplay = formatSetsDisplay(ex);
+    const muscles = resolveExerciseMuscles(ex.name, ex.muscles);
+    const muscleLabel = muscles.length
+      ? `<span class="cw-ex-muscles">· ${muscles.map(m => RP_VOL[m]?.label || m).join(', ')}</span>`
+      : '';
+    return `<div class="cw-exercise extra">
+      <div class="cw-ex-top">
+        <span class="cw-ex-num">+</span>
+        <span class="cw-ex-name">${ex.name}${muscleLabel} <span style="color:var(--accent4);font-size:11px">extra</span></span>
+      </div>
+      <div class="cw-ex-row actual"><strong>Done</strong>${setsDisplay}</div>
+    </div>`;
+  }).join('');
+
+  // Stats pill
+  const completionPct = totalPlannedSets > 0 ? Math.round((totalSetsHit / totalPlannedSets) * 100) : 0;
+  const pillCls = completionPct >= 100 ? 'pill-green'
+                : completionPct >= 75  ? 'pill-teal'
+                : completionPct >= 50  ? 'pill-purple'
+                                       : 'pill-red';
+
+  const peekBtn = nextWorkout
+    ? `<button class="cw-peek-btn" onclick="toggleNextWorkoutView('next')">Preview next workout →</button>`
+    : '';
+
+  el.innerHTML = `<div class="next-workout-card completed">
+    <div class="nw-header">
+      <div>
+        <div class="nw-section-label completed">✓ Today's workout · Completed</div>
+        <div class="nw-title-row" style="margin-top:4px">
+          <span class="nw-date-line">${plannedTmpl.name}</span>
+          <span class="nw-when today">Today</span>
+          <span style="font-size:12px;color:var(--text3)">${formatDateShort(session.date)}</span>
+        </div>
+      </div>
+      <div class="nw-stats">
+        <span class="pill ${pillCls}">${totalSetsHit}/${totalPlannedSets} sets · ${completionPct}%</span>
+        ${peekBtn}
+      </div>
+    </div>
+    <div class="cw-exercises">
+      ${exerciseRows}
+      ${extrasHtml}
+    </div>
   </div>`;
 }
 
@@ -4440,6 +4630,7 @@ function submitQuickLog() {
     closeModal('quick-log-modal');
     showToast(`Logged ${sessions.length} session${sessions.length === 1 ? '' : 's'}`);
     updateFabBadge();
+    _nextWorkoutMode = null; // Reset so the freshly-logged workout shows in the Completed view by default
     // Refresh whatever page is active
     const activePage = document.querySelector('.page.active')?.id;
     if (activePage === 'page-planner')   renderPlanner();
