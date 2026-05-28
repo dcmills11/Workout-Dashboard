@@ -406,6 +406,30 @@ body {
   white-space: nowrap;
 }
 .cw-peek-btn:hover { color: var(--accent); border-color: var(--accent); }
+.cw-edit-btn { color: var(--accent4); border-color: rgba(160,107,255,0.3); }
+.cw-edit-btn:hover { color: var(--accent4); border-color: var(--accent4); background: rgba(160,107,255,0.06); }
+
+.cw-variation-flag {
+  display: inline-block;
+  padding: 1px 8px;
+  background: rgba(232,180,107,0.14);
+  color: #ffc06b;
+  border: 1px solid rgba(255,192,107,0.3);
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 8px;
+  cursor: help;
+  vertical-align: middle;
+}
+.cw-variation-flag::before { content: "⚠ "; }
+.cw-variation-detail {
+  font-size: 11px;
+  color: #ffc06b;
+  padding-left: 28px;
+  margin-top: 3px;
+  font-style: italic;
+}
 
 /* NEXT WORKOUT CARD (Planner page) */
 .next-workout-card {
@@ -1689,6 +1713,69 @@ function normalizeExerciseName(name) {
   return name.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+// Fuzzy normalization: also strips parenthetical content (for matching exercise variants)
+function normalizeForMatch(name) {
+  return name.toLowerCase().trim().replace(/\s+/g, ' ').replace(/\s*\([^)]*\)/g, '').trim();
+}
+
+// Cached set of every exercise name that appears in WORKOUT_TEMPLATES
+let _canonicalNamesCache = null;
+function getCanonicalExerciseNames() {
+  if (_canonicalNamesCache) return _canonicalNamesCache;
+  const names = new Set();
+  for (const tmpl of Object.values(WORKOUT_TEMPLATES)) {
+    for (const ex of (tmpl.exercises || [])) names.add(ex.name);
+  }
+  _canonicalNamesCache = [...names];
+  return _canonicalNamesCache;
+}
+
+// Look up a canonical (template) name for a raw exercise name.
+// First tries exact case-insensitive match, then parens-stripped match (only if unambiguous).
+function findCanonicalExerciseName(rawName) {
+  if (!rawName) return null;
+  const templates = getCanonicalExerciseNames();
+  const exactNorm = normalizeExerciseName(rawName);
+  for (const cName of templates) {
+    if (normalizeExerciseName(cName) === exactNorm) return cName;
+  }
+  const fuzzyNorm = normalizeForMatch(rawName);
+  if (!fuzzyNorm) return null;
+  const matches = templates.filter(c => normalizeForMatch(c) === fuzzyNorm);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+// Serialize a session back to paste-import text (for editing in the quick-log modal)
+function sessionToPasteFormat(session) {
+  if (!session) return '';
+  const lines = [];
+  // Date row: YYYY-MM-DD → M/D/YY
+  const [y, m, d] = session.date.split('-').map(Number);
+  lines.push(`${m}/${d}/${String(y).slice(-2)}`);
+
+  for (const ex of session.exercises) {
+    if (!ex.sets || !ex.sets.length) {
+      lines.push(ex.name + (ex.isSkipped ? ' (skipped)' : ''));
+      continue;
+    }
+    // Check if all sets share a single weight
+    const wRepr = (s) => s.weightRaw || (s.weight != null ? String(s.weight) : '');
+    const firstW = wRepr(ex.sets[0]);
+    const allSame = ex.sets.every(s => wRepr(s) === firstW);
+
+    if (allSame) {
+      const reps = ex.sets.map(s => s.reps).join('\t');
+      lines.push(`${ex.name}\t${firstW}\t${reps}`);
+    } else {
+      // Alternating weight/rep form (5/3/1 style)
+      const parts = [];
+      for (const s of ex.sets) { parts.push(wRepr(s)); parts.push(s.reps); }
+      lines.push(`${ex.name}\t${parts.join('\t')}`);
+    }
+  }
+  return lines.join('\n');
+}
+
 function resolveExerciseMuscles(name, fallback) {
   const overrides = getMuscleOverrides();
   const key = normalizeExerciseName(name);
@@ -2019,6 +2106,13 @@ function parseExerciseName(nameCell, weightCell) {
        .replace(/\s*\(skip(?:ped)?\)\s*/gi, '')
        .trim();
 
+  // FIRST: try matching the full name (parens included) against template canonical names.
+  // If found, use the template's canonical name — preserves things like "Lat Pulldown (close neutral)".
+  const fullCanonical = findCanonicalExerciseName(s);
+  if (fullCanonical) {
+    return { primary: fullCanonical, alternate: null, skipped, notes: [] };
+  }
+
   // Does the weight cell have a parenthetical number? If so, name's parens = alternate exercise
   const weightHasAlt = /\(\s*[\d2]/.test(weightCell || '');
 
@@ -2031,9 +2125,15 @@ function parseExerciseName(nameCell, weightCell) {
 
     if (weightHasAlt) {
       return { primary, alternate: inside, skipped, notes: [] };
-    } else {
-      return { primary, alternate: null, skipped, notes: [inside] };
     }
+    // No alternate-weight, but the parens might be a real qualifier matching a template.
+    // Try canonical match on the stripped name — e.g. "Bench Press 5/3/1 (changed max for next)"
+    // → canonical "Bench Press 5/3/1", and the paren content becomes a note.
+    const strippedCanonical = findCanonicalExerciseName(primary);
+    if (strippedCanonical) {
+      return { primary: strippedCanonical, alternate: null, skipped, notes: [inside] };
+    }
+    return { primary, alternate: null, skipped, notes: [inside] };
   }
 
   return { primary: s, alternate: null, skipped, notes: [] };
@@ -3882,26 +3982,51 @@ function renderNextWorkout() {
 
 // Renders the "today's workout completed" view with planned vs actual comparison
 function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
-  // Build map of actual exercises by normalized name for matching
-  const actualByName = {};
-  const actualUnmatched = []; // exercises done that weren't planned
+  // Build maps of actual exercises by exact and fuzzy keys for matching
+  const actualByExact = {}; // normalized name → ex
+  const actualByFuzzy = {}; // parens-stripped name → [ex,...]
   for (const ex of session.exercises) {
-    actualByName[normalizeExerciseName(ex.name)] = ex;
+    actualByExact[normalizeExerciseName(ex.name)] = ex;
+    const f = normalizeForMatch(ex.name);
+    if (!actualByFuzzy[f]) actualByFuzzy[f] = [];
+    actualByFuzzy[f].push(ex);
   }
+  const matchedKeys = new Set();
 
   // For each planned exercise, find actual + classify
   let totalPlannedSets = 0;
   let totalSetsHit = 0;
+  let variationCount = 0;
+
   const exerciseRows = plannedTmpl.exercises.map((plannedEx, idx) => {
     totalPlannedSets += plannedEx.sets;
-    const key = normalizeExerciseName(plannedEx.name);
-    const actual = actualByName[key];
-    if (actual) delete actualByName[key]; // mark as matched
+    const exactKey = normalizeExerciseName(plannedEx.name);
+    const fuzzyKey = normalizeForMatch(plannedEx.name);
+
+    let actual = actualByExact[exactKey];
+    let isVariation = false;
+
+    // Exact match wins
+    if (actual) {
+      matchedKeys.add(exactKey);
+    } else {
+      // Fuzzy match: parens-stripped name matches
+      const fuzzyCandidates = (actualByFuzzy[fuzzyKey] || []).filter(c => !matchedKeys.has(normalizeExerciseName(c.name)));
+      if (fuzzyCandidates.length > 0) {
+        actual = fuzzyCandidates[0];
+        matchedKeys.add(normalizeExerciseName(actual.name));
+        isVariation = true;
+        variationCount++;
+      }
+    }
 
     const muscleLabel = plannedEx.muscles.length
       ? `<span class="cw-ex-muscles">· ${plannedEx.muscles.map(m => RP_VOL[m]?.label || m).join(', ')}</span>`
       : '';
     const planSummary = plannedEx.reps ? `${plannedEx.sets} × ${plannedEx.reps}` : `${plannedEx.sets} sets`;
+    const variationFlag = isVariation
+      ? `<span class="cw-variation-flag" title="Logged name differs from planned name — review and fix in Edit if needed">name variation</span>`
+      : '';
 
     if (!actual || actual.isSkipped) {
       return `<div class="cw-exercise miss">
@@ -3928,20 +4053,27 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
     const setsDelta = setsHit < plannedEx.sets
       ? `<span class="delta">(${setsHit}/${plannedEx.sets} sets)</span>`
       : '';
+    const variationDetail = isVariation
+      ? `<div class="cw-variation-detail">Logged as: "${actual.name}" — rename to match plan, or accept</div>`
+      : '';
 
     return `<div class="cw-exercise ${cls}">
       <div class="cw-ex-top">
         <span class="cw-ex-num">${idx + 1}.</span>
-        <span class="cw-ex-name">${plannedEx.name}${muscleLabel}</span>
+        <span class="cw-ex-name">${plannedEx.name}${muscleLabel}${variationFlag}</span>
         <span class="cw-ex-icon ${cls}">${icon}</span>
       </div>
       <div class="cw-ex-row planned"><strong>Planned</strong>${planSummary}</div>
       <div class="cw-ex-row actual"><strong>Done</strong>${setsDisplay}${setsDelta}</div>
+      ${variationDetail}
     </div>`;
   }).join('');
 
-  // Extras: actual exercises that weren't in the plan
-  const extras = Object.values(actualByName).filter(ex => !ex.isSkipped && ex.sets.length > 0);
+  // Extras: actual exercises that weren't matched to any planned exercise
+  const extras = session.exercises.filter(ex => {
+    if (ex.isSkipped || !ex.sets.length) return false;
+    return !matchedKeys.has(normalizeExerciseName(ex.name));
+  });
   const extrasHtml = extras.map(ex => {
     const setsDisplay = formatSetsDisplay(ex);
     const muscles = resolveExerciseMuscles(ex.name, ex.muscles);
@@ -3967,6 +4099,15 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
   const peekBtn = nextWorkout
     ? `<button class="cw-peek-btn" onclick="toggleNextWorkoutView('next')">Preview next workout →</button>`
     : '';
+  const editBtn = `<button class="cw-peek-btn cw-edit-btn" onclick="editSessionByDate('${session.date}')">Edit workout</button>`;
+
+  // Banner if any variations or extras need reconciliation
+  const issueCount = variationCount + extras.length;
+  const reconcileBanner = issueCount > 0
+    ? `<div style="margin-top:10px;padding:8px 12px;background:rgba(255,192,107,0.06);border:1px solid rgba(255,192,107,0.2);border-radius:var(--rad);font-size:11px;color:#ffc06b;line-height:1.5">
+        ⚠ ${issueCount} item${issueCount === 1 ? '' : 's'} may need reconciliation: ${variationCount} name variation${variationCount === 1 ? '' : 's'}${variationCount && extras.length ? ', ' : ''}${extras.length ? `${extras.length} unplanned extra${extras.length === 1 ? '' : 's'}` : ''}. Click <strong>Edit workout</strong> to rename or remove.
+      </div>`
+    : '';
 
   el.innerHTML = `<div class="next-workout-card completed">
     <div class="nw-header">
@@ -3980,10 +4121,12 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
       </div>
       <div class="nw-stats">
         <span class="pill ${pillCls}">${totalSetsHit}/${totalPlannedSets} sets · ${completionPct}%</span>
+        ${editBtn}
         ${peekBtn}
       </div>
     </div>
-    <div class="cw-exercises">
+    ${reconcileBanner}
+    <div class="cw-exercises" style="margin-top:14px">
       ${exerciseRows}
       ${extrasHtml}
     </div>
@@ -4541,14 +4684,32 @@ function openQuickLog() {
     }
     ctx.innerHTML = rows ? `<div class="ql-context">${rows}</div>` : '';
   }
-  document.getElementById('ql-paste-input').value = '';
   document.getElementById('ql-preview').innerHTML = '';
   document.getElementById('ql-save-btn').disabled = true;
-  // Default date input to today
-  const todayInput = new Date();
-  document.getElementById('ql-date').value = todayInput.toISOString().split('T')[0];
+
+  // If we were given a prefill (edit-mode), populate from that. Otherwise blank with today's date.
+  if (openQuickLog._prefill) {
+    const pre = openQuickLog._prefill;
+    document.getElementById('ql-paste-input').value = sessionToPasteFormat(pre);
+    document.getElementById('ql-date').value = pre.date;
+    openQuickLog._prefill = null;
+    // Trigger preview render with the prefilled content
+    setTimeout(() => updateQuickLogPreview(), 0);
+  } else {
+    document.getElementById('ql-paste-input').value = '';
+    const todayInput = new Date();
+    document.getElementById('ql-date').value = todayInput.toISOString().split('T')[0];
+  }
   document.getElementById('quick-log-modal').classList.add('open');
   setTimeout(() => document.getElementById('ql-paste-input').focus(), 100);
+}
+
+// Open quick-log with a session pre-filled (edit existing workout)
+function editSessionByDate(date) {
+  const session = getSessionMap()[date];
+  if (!session) { showToast('No session found for that date', true); return; }
+  openQuickLog._prefill = session;
+  openQuickLog();
 }
 
 function updateQuickLogPreview() {
