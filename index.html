@@ -408,6 +408,24 @@ body {
 .cw-peek-btn:hover { color: var(--accent); border-color: var(--accent); }
 .cw-edit-btn { color: var(--accent4); border-color: rgba(160,107,255,0.3); }
 .cw-edit-btn:hover { color: var(--accent4); border-color: var(--accent4); background: rgba(160,107,255,0.06); }
+.cw-accept-btn { color: var(--accent3); border-color: rgba(107,255,213,0.4); margin-left: 8px; }
+.cw-accept-btn:hover { color: var(--accent3); border-color: var(--accent3); background: rgba(107,255,213,0.08); }
+
+.cw-reconcile-banner {
+  padding: 10px 14px;
+  background: rgba(255,192,107,0.06);
+  border: 1px solid rgba(255,192,107,0.2);
+  border-radius: var(--rad);
+  font-size: 12px;
+  color: #ffc06b;
+  line-height: 1.7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
 
 .cw-variation-flag {
   display: inline-block;
@@ -1519,7 +1537,7 @@ const WORKOUT_TEMPLATES = {
       { name:'Weighted Pull-Up',            muscles:['back','biceps'],     sets:3, reps:'6-10' },
       { name:'T-Bar Row',                   muscles:['back'],              sets:3, reps:'8-10' },
       { name:'Single Arm Cable Row',        muscles:['back'],              sets:3, reps:'10-12' },
-      { name:'Lat Pulldown (close neutral)', muscles:['back'],             sets:3, reps:'10-15' },
+      { name:'Lat Pulldown', variation:'close neutral', muscles:['back'],   sets:3, reps:'10-15' },
       { name:'Kneeling Cable Pullover',     muscles:['back'],              sets:2, reps:'12-15' },
       { name:'Cable Face Pull',             muscles:['reardelts'],         sets:3, reps:'15-20' },
       { name:'Reverse Pec Deck',            muscles:['reardelts'],         sets:3, reps:'12-15' },
@@ -1718,16 +1736,38 @@ function normalizeForMatch(name) {
   return name.toLowerCase().trim().replace(/\s+/g, ' ').replace(/\s*\([^)]*\)/g, '').trim();
 }
 
-// Cached set of every exercise name that appears in WORKOUT_TEMPLATES
+// Format an exercise (template entry or session entry) as "Base" or "Base (variation)"
+function formatExerciseFullName(ex) {
+  if (!ex || !ex.name) return '';
+  return ex.variation ? `${ex.name} (${ex.variation})` : ex.name;
+}
+
+// Cached set of every exercise name that appears in WORKOUT_TEMPLATES (both base and base+variation forms)
 let _canonicalNamesCache = null;
 function getCanonicalExerciseNames() {
   if (_canonicalNamesCache) return _canonicalNamesCache;
   const names = new Set();
   for (const tmpl of Object.values(WORKOUT_TEMPLATES)) {
-    for (const ex of (tmpl.exercises || [])) names.add(ex.name);
+    for (const ex of (tmpl.exercises || [])) {
+      names.add(ex.name);
+      if (ex.variation) names.add(`${ex.name} (${ex.variation})`);
+    }
   }
   _canonicalNamesCache = [...names];
   return _canonicalNamesCache;
+}
+
+// Find the template exercise object that matches a given full or base name
+function findTemplateExercise(rawName) {
+  if (!rawName) return null;
+  const norm = normalizeExerciseName(rawName);
+  for (const tmpl of Object.values(WORKOUT_TEMPLATES)) {
+    for (const ex of tmpl.exercises) {
+      if (normalizeExerciseName(formatExerciseFullName(ex)) === norm) return ex;
+      if (normalizeExerciseName(ex.name) === norm) return ex;
+    }
+  }
+  return null;
 }
 
 // Look up a canonical (template) name for a raw exercise name.
@@ -1754,8 +1794,9 @@ function sessionToPasteFormat(session) {
   lines.push(`${m}/${d}/${String(y).slice(-2)}`);
 
   for (const ex of session.exercises) {
+    const fullName = formatExerciseFullName(ex);
     if (!ex.sets || !ex.sets.length) {
-      lines.push(ex.name + (ex.isSkipped ? ' (skipped)' : ''));
+      lines.push(fullName + (ex.isSkipped ? ' (skipped)' : ''));
       continue;
     }
     // Check if all sets share a single weight
@@ -1765,16 +1806,19 @@ function sessionToPasteFormat(session) {
 
     if (allSame) {
       const reps = ex.sets.map(s => s.reps).join('\t');
-      lines.push(`${ex.name}\t${firstW}\t${reps}`);
+      lines.push(`${fullName}\t${firstW}\t${reps}`);
     } else {
       // Alternating weight/rep form (5/3/1 style)
       const parts = [];
       for (const s of ex.sets) { parts.push(wRepr(s)); parts.push(s.reps); }
-      lines.push(`${ex.name}\t${parts.join('\t')}`);
+      lines.push(`${fullName}\t${parts.join('\t')}`);
     }
   }
   return lines.join('\n');
 }
+
+// Tracks the most recent variation suggestions shown in the quick-log preview
+let _qlVariationSuggestions = [];
 
 function resolveExerciseMuscles(name, fallback) {
   const overrides = getMuscleOverrides();
@@ -2106,14 +2150,14 @@ function parseExerciseName(nameCell, weightCell) {
        .replace(/\s*\(skip(?:ped)?\)\s*/gi, '')
        .trim();
 
-  // FIRST: try matching the full name (parens included) against template canonical names.
-  // If found, use the template's canonical name — preserves things like "Lat Pulldown (close neutral)".
-  const fullCanonical = findCanonicalExerciseName(s);
-  if (fullCanonical) {
-    return { primary: fullCanonical, alternate: null, skipped, notes: [] };
+  // FIRST: try matching the full name against a template entry. Template entries
+  // may declare a variation field, so we want to return the split base + variation.
+  const fullTmplMatch = findTemplateExercise(s);
+  if (fullTmplMatch) {
+    return { primary: fullTmplMatch.name, variation: fullTmplMatch.variation || null, alternate: null, skipped, notes: [] };
   }
 
-  // Does the weight cell have a parenthetical number? If so, name's parens = alternate exercise
+  // Does the weight cell have a parenthetical number? If so, name's parens = alternate exercise (legacy behavior)
   const weightHasAlt = /\(\s*[\d2]/.test(weightCell || '');
 
   const parenMatch = s.match(/^(.*?)\s*\(([^)]+)\)\s*(.*)$/);
@@ -2121,22 +2165,22 @@ function parseExerciseName(nameCell, weightCell) {
     const before = parenMatch[1].trim();
     const inside = parenMatch[2].trim();
     const after = (parenMatch[3] || '').trim();
-    const primary = (before + (after ? ' ' + after : '')).trim();
+    const baseName = (before + (after ? ' ' + after : '')).trim();
 
     if (weightHasAlt) {
-      return { primary, alternate: inside, skipped, notes: [] };
+      return { primary: baseName, alternate: inside, variation: null, skipped, notes: [] };
     }
-    // No alternate-weight, but the parens might be a real qualifier matching a template.
-    // Try canonical match on the stripped name — e.g. "Bench Press 5/3/1 (changed max for next)"
-    // → canonical "Bench Press 5/3/1", and the paren content becomes a note.
-    const strippedCanonical = findCanonicalExerciseName(primary);
-    if (strippedCanonical) {
-      return { primary: strippedCanonical, alternate: null, skipped, notes: [inside] };
+
+    // Try canonical match on the base name (without parens). If found, treat parens as a VARIATION.
+    const baseTmplMatch = findTemplateExercise(baseName);
+    if (baseTmplMatch) {
+      return { primary: baseTmplMatch.name, variation: inside, alternate: null, skipped, notes: [] };
     }
-    return { primary, alternate: null, skipped, notes: [inside] };
+    // No template match — store base + variation anyway (treat parens as variation, not note)
+    return { primary: baseName, variation: inside, alternate: null, skipped, notes: [] };
   }
 
-  return { primary: s, alternate: null, skipped, notes: [] };
+  return { primary: s, variation: null, alternate: null, skipped, notes: [] };
 }
 
 function parseExerciseRow(cells) {
@@ -2177,6 +2221,7 @@ function parseExerciseRow(cells) {
 
   return {
     name: primaryName,
+    variation: nameInfo.variation || null,
     alternate: nameInfo.alternate,
     muscles,
     sets,
@@ -3838,10 +3883,39 @@ function renderMissedBanner() {
 
 // Toggle state for the Next Workout card: null = auto, 'completed' = force today, 'next' = force upcoming
 let _nextWorkoutMode = null;
+// Holds the most recently computed list of {sessionDate, actualBase, actualVariation, plannedVariation}
+// so the Accept-all button can apply them
+let _pendingReconciliations = [];
 
 function toggleNextWorkoutView(mode) {
   _nextWorkoutMode = mode;
   renderNextWorkout();
+}
+
+// Apply all pending variation reconciliations — sets variation on each actual exercise to match planned
+function acceptAllReconciliations() {
+  const items = _pendingReconciliations.slice();
+  if (!items.length) return;
+  const data = loadData();
+  let applied = 0;
+  for (const m of items) {
+    const session = data.sessions.find(s => s.date === m.sessionDate);
+    if (!session) continue;
+    // Find the actual exercise: base name matches, current variation matches
+    const ex = session.exercises.find(e => {
+      const sameBase = normalizeExerciseName(e.name) === normalizeExerciseName(m.actualBase);
+      const sameVar = (e.variation || null) === (m.actualVariation || null);
+      return sameBase && sameVar;
+    });
+    if (ex) {
+      ex.variation = m.plannedVariation || null;
+      applied++;
+    }
+  }
+  saveData(data);
+  _pendingReconciliations = [];
+  renderPlanner();
+  showToast(`Applied ${applied} variation reconciliation${applied === 1 ? '' : 's'}`);
 }
 
 function renderNextWorkout() {
@@ -3982,41 +4056,49 @@ function renderNextWorkout() {
 
 // Renders the "today's workout completed" view with planned vs actual comparison
 function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
-  // Build maps of actual exercises by exact and fuzzy keys for matching
-  const actualByExact = {}; // normalized name → ex
-  const actualByFuzzy = {}; // parens-stripped name → [ex,...]
+  // Build maps of actual exercises by full-name (base+variation) and base-name for matching
+  const actualByFull = {};  // full-name → ex
+  const actualByBase = {};  // base-name → [ex,...]
   for (const ex of session.exercises) {
-    actualByExact[normalizeExerciseName(ex.name)] = ex;
-    const f = normalizeForMatch(ex.name);
-    if (!actualByFuzzy[f]) actualByFuzzy[f] = [];
-    actualByFuzzy[f].push(ex);
+    actualByFull[normalizeExerciseName(formatExerciseFullName(ex))] = ex;
+    const baseKey = normalizeExerciseName(ex.name);
+    if (!actualByBase[baseKey]) actualByBase[baseKey] = [];
+    actualByBase[baseKey].push(ex);
   }
-  const matchedKeys = new Set();
+  const matchedSet = new Set(); // actual exercises that have been matched to a planned
 
   // For each planned exercise, find actual + classify
   let totalPlannedSets = 0;
   let totalSetsHit = 0;
-  let variationCount = 0;
+  const variationMismatches = []; // for the "Accept all" button — array of {sessionDate, actualBase, actualVariation, plannedVariation}
 
   const exerciseRows = plannedTmpl.exercises.map((plannedEx, idx) => {
     totalPlannedSets += plannedEx.sets;
-    const exactKey = normalizeExerciseName(plannedEx.name);
-    const fuzzyKey = normalizeForMatch(plannedEx.name);
+    const plannedFullKey = normalizeExerciseName(formatExerciseFullName(plannedEx));
+    const plannedBaseKey = normalizeExerciseName(plannedEx.name);
 
-    let actual = actualByExact[exactKey];
-    let isVariation = false;
+    let actual = actualByFull[plannedFullKey];
+    let isVariationMismatch = false;
 
-    // Exact match wins
     if (actual) {
-      matchedKeys.add(exactKey);
+      matchedSet.add(actual);
     } else {
-      // Fuzzy match: parens-stripped name matches
-      const fuzzyCandidates = (actualByFuzzy[fuzzyKey] || []).filter(c => !matchedKeys.has(normalizeExerciseName(c.name)));
-      if (fuzzyCandidates.length > 0) {
-        actual = fuzzyCandidates[0];
-        matchedKeys.add(normalizeExerciseName(actual.name));
-        isVariation = true;
-        variationCount++;
+      // Try matching by base name (variation may differ)
+      const baseCandidates = (actualByBase[plannedBaseKey] || []).filter(c => !matchedSet.has(c));
+      if (baseCandidates.length > 0) {
+        actual = baseCandidates[0];
+        matchedSet.add(actual);
+        const actualVar = (actual.variation || null);
+        const plannedVar = (plannedEx.variation || null);
+        if (actualVar !== plannedVar) {
+          isVariationMismatch = true;
+          variationMismatches.push({
+            sessionDate: session.date,
+            actualBase: actual.name,
+            actualVariation: actualVar,
+            plannedVariation: plannedVar,
+          });
+        }
       }
     }
 
@@ -4024,15 +4106,16 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
       ? `<span class="cw-ex-muscles">· ${plannedEx.muscles.map(m => RP_VOL[m]?.label || m).join(', ')}</span>`
       : '';
     const planSummary = plannedEx.reps ? `${plannedEx.sets} × ${plannedEx.reps}` : `${plannedEx.sets} sets`;
-    const variationFlag = isVariation
-      ? `<span class="cw-variation-flag" title="Logged name differs from planned name — review and fix in Edit if needed">name variation</span>`
+    const plannedDisplayName = formatExerciseFullName(plannedEx);
+    const variationFlag = isVariationMismatch
+      ? `<span class="cw-variation-flag" title="Variation mismatch — planned has '${plannedEx.variation || 'none'}', logged has '${actual.variation || 'none'}'">variation mismatch</span>`
       : '';
 
     if (!actual || actual.isSkipped) {
       return `<div class="cw-exercise miss">
         <div class="cw-ex-top">
           <span class="cw-ex-num">${idx + 1}.</span>
-          <span class="cw-ex-name">${plannedEx.name}${muscleLabel}</span>
+          <span class="cw-ex-name">${plannedDisplayName}${muscleLabel}</span>
           <span class="cw-ex-icon miss">✗</span>
         </div>
         <div class="cw-ex-row planned"><strong>Planned</strong>${planSummary}</div>
@@ -4053,14 +4136,14 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
     const setsDelta = setsHit < plannedEx.sets
       ? `<span class="delta">(${setsHit}/${plannedEx.sets} sets)</span>`
       : '';
-    const variationDetail = isVariation
-      ? `<div class="cw-variation-detail">Logged as: "${actual.name}" — rename to match plan, or accept</div>`
+    const variationDetail = isVariationMismatch
+      ? `<div class="cw-variation-detail">Logged as "${formatExerciseFullName(actual)}" · planned variation: ${plannedEx.variation ? `"${plannedEx.variation}"` : 'none'}</div>`
       : '';
 
     return `<div class="cw-exercise ${cls}">
       <div class="cw-ex-top">
         <span class="cw-ex-num">${idx + 1}.</span>
-        <span class="cw-ex-name">${plannedEx.name}${muscleLabel}${variationFlag}</span>
+        <span class="cw-ex-name">${plannedDisplayName}${muscleLabel}${variationFlag}</span>
         <span class="cw-ex-icon ${cls}">${icon}</span>
       </div>
       <div class="cw-ex-row planned"><strong>Planned</strong>${planSummary}</div>
@@ -4070,10 +4153,7 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
   }).join('');
 
   // Extras: actual exercises that weren't matched to any planned exercise
-  const extras = session.exercises.filter(ex => {
-    if (ex.isSkipped || !ex.sets.length) return false;
-    return !matchedKeys.has(normalizeExerciseName(ex.name));
-  });
+  const extras = session.exercises.filter(ex => !ex.isSkipped && ex.sets.length && !matchedSet.has(ex));
   const extrasHtml = extras.map(ex => {
     const setsDisplay = formatSetsDisplay(ex);
     const muscles = resolveExerciseMuscles(ex.name, ex.muscles);
@@ -4083,7 +4163,7 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
     return `<div class="cw-exercise extra">
       <div class="cw-ex-top">
         <span class="cw-ex-num">+</span>
-        <span class="cw-ex-name">${ex.name}${muscleLabel} <span style="color:var(--accent4);font-size:11px">extra</span></span>
+        <span class="cw-ex-name">${formatExerciseFullName(ex)}${muscleLabel} <span style="color:var(--accent4);font-size:11px">extra</span></span>
       </div>
       <div class="cw-ex-row actual"><strong>Done</strong>${setsDisplay}</div>
     </div>`;
@@ -4101,11 +4181,18 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
     : '';
   const editBtn = `<button class="cw-peek-btn cw-edit-btn" onclick="editSessionByDate('${session.date}')">Edit workout</button>`;
 
-  // Banner if any variations or extras need reconciliation
+  // Banner + Accept-all button when there are variation mismatches (or extras)
+  const variationCount = variationMismatches.length;
   const issueCount = variationCount + extras.length;
+  // Stash the mismatch list for the accept-all handler to read
+  _pendingReconciliations = variationMismatches;
+  const acceptAllBtn = variationCount > 0
+    ? `<button class="cw-peek-btn cw-accept-btn" onclick="acceptAllReconciliations()">✓ Accept all ${variationCount} suggestion${variationCount === 1 ? '' : 's'}</button>`
+    : '';
   const reconcileBanner = issueCount > 0
-    ? `<div style="margin-top:10px;padding:8px 12px;background:rgba(255,192,107,0.06);border:1px solid rgba(255,192,107,0.2);border-radius:var(--rad);font-size:11px;color:#ffc06b;line-height:1.5">
-        ⚠ ${issueCount} item${issueCount === 1 ? '' : 's'} may need reconciliation: ${variationCount} name variation${variationCount === 1 ? '' : 's'}${variationCount && extras.length ? ', ' : ''}${extras.length ? `${extras.length} unplanned extra${extras.length === 1 ? '' : 's'}` : ''}. Click <strong>Edit workout</strong> to rename or remove.
+    ? `<div class="cw-reconcile-banner">
+        ⚠ ${issueCount} item${issueCount === 1 ? '' : 's'} may need reconciliation: ${variationCount ? `${variationCount} variation mismatch${variationCount === 1 ? '' : 'es'}` : ''}${variationCount && extras.length ? ', ' : ''}${extras.length ? `${extras.length} unplanned extra${extras.length === 1 ? '' : 's'}` : ''}.
+        ${acceptAllBtn}
       </div>`
     : '';
 
@@ -4744,10 +4831,35 @@ function updateQuickLogPreview() {
   const existingDates = new Set(getSessions().map(s => s.date));
   const willOverwrite = sessions.filter(s => existingDates.has(s.date));
 
+  // Look for variation suggestions: parsed exercises whose base matches a planned exercise
+  // for that session date, but variation differs. The Apply-suggestions button writes the
+  // planned variations into the parsed data before saving.
+  const allPlans = getPlans();
+  _qlVariationSuggestions = [];
+  for (const s of sessions) {
+    const plan = allPlans.find(p => p.date === s.date);
+    const tmpl = plan ? resolveTemplate(plan.templateId) : null;
+    if (!tmpl) continue;
+    for (let ei = 0; ei < s.exercises.length; ei++) {
+      const ex = s.exercises[ei];
+      const baseKey = normalizeExerciseName(ex.name);
+      const matched = tmpl.exercises.find(p => normalizeExerciseName(p.name) === baseKey);
+      if (matched && (ex.variation || null) !== (matched.variation || null)) {
+        _qlVariationSuggestions.push({
+          sessionDate: s.date,
+          exerciseIdx: ei,
+          base: ex.name,
+          currentVariation: ex.variation || null,
+          suggestedVariation: matched.variation || null,
+        });
+      }
+    }
+  }
+
   let html = '';
   let unmappedCount = 0;
   for (const s of sessions) {
-    const exHtml = s.exercises.map(ex => {
+    const exHtml = s.exercises.map((ex, ei) => {
       const setsDisplay = formatSetsDisplay(ex);
       const muscles = resolveExerciseMuscles(ex.name, ex.muscles);
       if (!muscles.length) unmappedCount++;
@@ -4755,10 +4867,20 @@ function updateQuickLogPreview() {
         ? muscles.map(m => `<span class="pill pill-gray" style="font-size:10px;padding:1px 6px">${RP_VOL[m]?.label || m}</span>`).join(' ')
         : '<span style="color:var(--accent2);font-size:10px;font-style:italic">unmapped — no muscle group detected</span>';
       const noMusclesCls = muscles.length ? '' : 'no-muscles';
+      const fullName = formatExerciseFullName(ex);
+      const variationBadge = ex.variation
+        ? `<span class="pill pill-purple" style="font-size:10px;padding:1px 7px;margin-left:6px">var: ${ex.variation}</span>`
+        : '';
+      // Check if this exercise has a suggestion
+      const sug = _qlVariationSuggestions.find(x => x.sessionDate === s.date && x.exerciseIdx === ei);
+      const suggestionHtml = sug
+        ? `<div style="font-size:11px;color:#ffc06b;margin-top:4px;font-style:italic">⚠ Suggested variation: <strong>${sug.suggestedVariation || '(none)'}</strong>${sug.currentVariation ? ` · currently: ${sug.currentVariation}` : ''}</div>`
+        : '';
       return `<div class="ql-preview-ex ${noMusclesCls}">
-        <div class="ql-preview-ex-name">${ex.name}${ex.isSuperset ? ' <span style="color:var(--text3);font-size:10px">[SS]</span>' : ''}${ex.isSkipped ? ' <span style="color:var(--text3);font-size:10px">[skipped]</span>' : ''}</div>
+        <div class="ql-preview-ex-name">${ex.name}${variationBadge}${ex.isSuperset ? ' <span style="color:var(--text3);font-size:10px">[SS]</span>' : ''}${ex.isSkipped ? ' <span style="color:var(--text3);font-size:10px">[skipped]</span>' : ''}</div>
         <div class="ql-preview-ex-sets">${setsDisplay || '<span style="color:var(--text3);font-style:italic">no valid sets parsed</span>'}</div>
         <div class="ql-preview-ex-muscles">${muscleTags}</div>
+        ${suggestionHtml}
       </div>`;
     }).join('');
     const totalSets = s.exercises.reduce((sum, e) => sum + e.sets.filter(x => !x.skipped && x.reps > 0).length, 0);
@@ -4769,6 +4891,12 @@ function updateQuickLogPreview() {
   }
 
   let notes = '';
+  if (_qlVariationSuggestions.length > 0) {
+    notes += `<div class="ql-preview-warn" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <span>⚠ ${_qlVariationSuggestions.length} variation suggestion${_qlVariationSuggestions.length === 1 ? '' : 's'} — these exercises match a planned base name but the variation differs.</span>
+      <button class="btn btn-ghost btn-sm" style="color:var(--accent3);border-color:rgba(107,255,213,0.4)" onclick="applyQuickLogSuggestions()">Apply all suggestions</button>
+    </div>`;
+  }
   if (willOverwrite.length) {
     notes += `<div class="ql-preview-warn">⚠ ${willOverwrite.length === 1 ? 'A session' : 'Sessions'} for ${willOverwrite.map(s => formatDateShort(s.date)).join(', ')} ${willOverwrite.length === 1 ? 'already exists' : 'already exist'} — saving will replace ${willOverwrite.length === 1 ? 'it' : 'them'}.</div>`;
   }
@@ -4778,6 +4906,28 @@ function updateQuickLogPreview() {
 
   preview.innerHTML = `<div class="ql-preview"><div class="ql-preview-title">Preview · check before saving</div>${html}</div>${notes}`;
   saveBtn.disabled = false;
+}
+
+// Rewrite the paste text to apply suggested variations, then re-parse
+function applyQuickLogSuggestions() {
+  if (!_qlVariationSuggestions.length) return;
+  const date = document.getElementById('ql-date').value;
+  const raw = document.getElementById('ql-paste-input').value;
+  const sessions = parseGoogleSheetsPaste(raw, date);
+
+  // Mutate parsed exercises to apply suggested variations
+  for (const sug of _qlVariationSuggestions) {
+    const s = sessions.find(x => x.date === sug.sessionDate);
+    if (!s) continue;
+    const ex = s.exercises[sug.exerciseIdx];
+    if (ex) ex.variation = sug.suggestedVariation || null;
+  }
+
+  // Serialize back to paste text and update the textarea
+  const newText = sessions.map(s => sessionToPasteFormat(s)).join('\n\n');
+  document.getElementById('ql-paste-input').value = newText;
+  updateQuickLogPreview();
+  showToast(`Applied ${_qlVariationSuggestions.length} variation suggestion${_qlVariationSuggestions.length === 1 ? '' : 's'}`);
 }
 
 function submitQuickLog() {
