@@ -936,6 +936,124 @@ body {
   text-decoration: underline;
 }
 
+/* STREAK BAR */
+.streak-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, rgba(255,140,0,0.06), rgba(232,255,107,0.05));
+  border: 1px solid rgba(255,140,0,0.25);
+  border-radius: 99px;
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 18px;
+}
+.streak-icon { font-size: 18px; line-height: 1; }
+.streak-text strong {
+  color: #ffa64d;
+  font-weight: 700;
+  font-family: 'Syne', sans-serif;
+  letter-spacing: -0.2px;
+  margin-right: 6px;
+}
+.streak-bar.milestone {
+  background: linear-gradient(135deg, rgba(255,140,0,0.18), rgba(232,255,107,0.12));
+  border-color: rgba(255,140,0,0.5);
+  box-shadow: 0 0 20px rgba(255,140,0,0.15);
+}
+
+/* PERFECT WORKOUT styling (today-completed card at 100%) */
+.next-workout-card.completed.perfect {
+  background: linear-gradient(135deg, rgba(107,255,213,0.05) 0%, rgba(232,255,107,0.04) 100%);
+  border: 1px solid rgba(107,255,213,0.3);
+  border-left: 4px solid var(--accent3);
+  box-shadow: 0 0 40px rgba(107,255,213,0.12), 0 0 80px rgba(232,255,107,0.05);
+}
+.nw-perfect-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  background: linear-gradient(135deg, var(--accent3) 0%, var(--accent) 100%);
+  color: var(--bg);
+  border-radius: 99px;
+  font-family: 'Syne', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 12px rgba(107,255,213,0.25);
+}
+
+/* CELEBRATION OVERLAY (shown when 100% workout logged via FAB) */
+.celebration-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(13,13,15,0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+.celebration-overlay.show {
+  display: flex;
+  opacity: 1;
+}
+.celebration-content {
+  background: linear-gradient(135deg, rgba(232,255,107,0.14) 0%, rgba(107,255,213,0.14) 100%);
+  border: 2px solid rgba(232,255,107,0.5);
+  border-radius: var(--rad-xl);
+  padding: 38px 56px;
+  text-align: center;
+  box-shadow: 0 0 80px rgba(232,255,107,0.25), inset 0 0 40px rgba(232,255,107,0.04);
+  max-width: 90vw;
+  /* Quick, snappy pop-in: 320ms with cubic-bezier overshoot */
+  animation: celebrate-pop 320ms cubic-bezier(0.18, 1.4, 0.45, 1) both;
+}
+@keyframes celebrate-pop {
+  0%   { transform: scale(0.35); opacity: 0; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+.celebration-icon {
+  font-size: 84px;
+  line-height: 1;
+  display: block;
+  margin-bottom: 14px;
+  animation: celebrate-icon 700ms ease-in-out 240ms;
+}
+@keyframes celebrate-icon {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  40%      { transform: translateY(-14px) rotate(-8deg); }
+  70%      { transform: translateY(-5px) rotate(5deg); }
+}
+.celebration-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.6px;
+  margin-bottom: 6px;
+}
+.celebration-sub { color: var(--text2); font-size: 14px; }
+.celebration-detail {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  color: var(--accent);
+  font-family: 'Syne', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 /* TOAST */
 .toast { position: fixed; bottom: 24px; right: 24px; z-index: 300; background: var(--accent); color: #0d0d0f; padding: 10px 16px; border-radius: var(--rad); font-size: 13px; font-weight: 600; transform: translateY(60px); opacity: 0; transition: all 0.25s cubic-bezier(0.4,0,0.2,1); pointer-events: none; }
 .toast.show { transform: translateY(0); opacity: 1; }
@@ -1217,6 +1335,8 @@ body {
 
       <div id="planner-meso-bar"></div>
 
+      <div id="streak-display"></div>
+
       <div id="missed-banner" class="missed-banner"></div>
 
       <div id="next-workout-content"></div>
@@ -1483,6 +1603,16 @@ body {
       <button class="btn btn-ghost" onclick="closeModal('quick-log-modal')">Cancel</button>
       <button class="btn btn-primary" id="ql-save-btn" onclick="submitQuickLog()" disabled>Save</button>
     </div>
+  </div>
+</div>
+
+<!-- CELEBRATION OVERLAY (shown on 100% workout completion) -->
+<div class="celebration-overlay" id="celebration-overlay" onclick="hideCelebration()">
+  <div class="celebration-content">
+    <div class="celebration-icon" id="celebration-icon">🎯</div>
+    <div class="celebration-title" id="celebration-title">Workout Complete!</div>
+    <div class="celebration-sub" id="celebration-sub"></div>
+    <div class="celebration-detail" id="celebration-detail" style="display:none"></div>
   </div>
 </div>
 
@@ -4408,14 +4538,21 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
       </div>`
     : '';
 
-  el.innerHTML = `<div class="next-workout-card completed">
+  const isPerfect = completionPct >= 100;
+  const perfectBadge = isPerfect ? `<span class="nw-perfect-badge">★ Perfect</span>` : '';
+  const sectionLabel = isPerfect
+    ? '★ Today\'s workout · Perfect run'
+    : '✓ Today\'s workout · Completed';
+
+  el.innerHTML = `<div class="next-workout-card completed ${isPerfect ? 'perfect' : ''}">
     <div class="nw-header">
       <div>
-        <div class="nw-section-label completed">✓ Today's workout · Completed</div>
+        <div class="nw-section-label completed">${sectionLabel}</div>
         <div class="nw-title-row" style="margin-top:4px">
           <span class="nw-date-line">${plannedTmpl.name}</span>
           <span class="nw-when today">Today</span>
           <span style="font-size:12px;color:var(--text3)">${formatDateShort(session.date)}</span>
+          ${perfectBadge}
         </div>
       </div>
       <div class="nw-stats">
@@ -4436,6 +4573,7 @@ function renderPlanner() {
   renderMissedBanner();
   renderNextWorkout();
   renderMesoBar('planner-meso-bar');
+  renderStreakBar();
 
   const container = document.getElementById('planner-days');
   if (!container) return;
@@ -5154,12 +5292,15 @@ function saveEditedSession() {
   // Drop exercises with empty names
   _editingSession.exercises = _editingSession.exercises.filter(ex => ex.name && ex.name.trim());
 
+  const prevStreak = getCurrentStreak();
   addSessions([_editingSession]);
+  const savedClone = JSON.parse(JSON.stringify(_editingSession));
   closeModal('edit-session-modal');
   _editingSession = null;
   renderPlanner();
   updateFabBadge();
   showToast('Session updated');
+  checkCelebrationForSessions(prevStreak, [savedClone]);
 }
 
 function deleteEditingSession() {
@@ -5314,11 +5455,14 @@ function submitQuickLog() {
   try {
     const sessions = parseGoogleSheetsPaste(raw, date);
     if (!sessions.length) { showToast('Nothing to save — check the format', true); return; }
+    const prevStreak = getCurrentStreak();
     addSessions(sessions);
     closeModal('quick-log-modal');
     showToast(`Logged ${sessions.length} session${sessions.length === 1 ? '' : 's'}`);
     updateFabBadge();
     _nextWorkoutMode = null; // Reset so the freshly-logged workout shows in the Completed view by default
+    // Trigger celebration if this brought today's planned workout to 100% (or hit a streak milestone)
+    checkCelebrationForSessions(prevStreak, sessions);
     // Refresh whatever page is active
     const activePage = document.querySelector('.page.active')?.id;
     if (activePage === 'page-planner')   renderPlanner();
@@ -5341,6 +5485,134 @@ function updateFabBadge() {
   badge.textContent = count;
   if (count > 0) badge.classList.add('show');
   else badge.classList.remove('show');
+}
+
+// ─── STREAK & CELEBRATION ────────────────────────────────────────────────────
+
+// Count consecutive completed planned lift days, walking backward from today.
+// - Skipped-with-makeup days don't break the streak (p.skipped=true is skipped over)
+// - Today doesn't break the streak if it's planned but not yet logged
+function getCurrentStreak() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
+
+  const plans = getPlans();
+  const sessionMap = getSessionMap();
+  const liftingTypes = new Set(['push','pull','legs','plyo']);
+
+  const planEntries = plans
+    .filter(p => {
+      if (p.date > todayStr) return false;
+      const tmpl = WORKOUT_TEMPLATES[p.templateId];
+      return tmpl && liftingTypes.has(tmpl.type);
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  let streak = 0;
+  for (const p of planEntries) {
+    if (p.skipped) continue; // intentional skip-with-makeup — neither counts nor breaks
+    if (p.date === todayStr && !sessionMap[p.date]) continue; // today not yet logged — don't break
+    if (sessionMap[p.date]) streak++;
+    else break;
+  }
+  return streak;
+}
+
+function renderStreakBar() {
+  const el = document.getElementById('streak-display');
+  if (!el) return;
+  const streak = getCurrentStreak();
+  if (streak === 0) { el.innerHTML = ''; return; }
+  const isMilestone = [3,5,10,25,50,100].includes(streak);
+  const flame = streak >= 10 ? '🔥🔥' : streak >= 3 ? '🔥' : '⚡';
+  const msg = streak >= 5 ? 'on fire'
+            : streak >= 3 ? 'keep it going'
+            : 'streak starting';
+  el.innerHTML = `<div class="streak-bar ${isMilestone ? 'milestone' : ''}">
+    <span class="streak-icon">${flame}</span>
+    <span class="streak-text"><strong>${streak}-workout streak</strong> · ${msg}</span>
+  </div>`;
+}
+
+let _celebrationTimeout = null;
+function showCelebration({ icon='🎯', title='Workout Complete!', sub='', detail='' }) {
+  const overlay = document.getElementById('celebration-overlay');
+  if (!overlay) return;
+  document.getElementById('celebration-icon').textContent = icon;
+  document.getElementById('celebration-title').textContent = title;
+  document.getElementById('celebration-sub').textContent = sub;
+  const detailEl = document.getElementById('celebration-detail');
+  if (detail) { detailEl.textContent = detail; detailEl.style.display = ''; }
+  else { detailEl.style.display = 'none'; }
+
+  // Re-trigger animation: remove and re-add the `show` class so the CSS animation replays
+  overlay.classList.remove('show');
+  // Force reflow so the next class add restarts the animation
+  void overlay.offsetWidth;
+  overlay.classList.add('show');
+
+  clearTimeout(_celebrationTimeout);
+  _celebrationTimeout = setTimeout(hideCelebration, 3200);
+}
+
+function hideCelebration() {
+  const overlay = document.getElementById('celebration-overlay');
+  if (overlay) overlay.classList.remove('show');
+  clearTimeout(_celebrationTimeout);
+}
+
+// Compute completion percent of a session against today's planned template, and trigger
+// the celebration overlay if it's 100% (or a streak milestone was just unlocked).
+function checkCelebrationForSessions(prevStreak, savedSessions) {
+  if (!savedSessions || !savedSessions.length) return;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const liftingTypes = new Set(['push','pull','legs','plyo']);
+
+  for (const session of savedSessions) {
+    if (session.date !== todayStr) continue;
+    const plan = getPlans().find(p => p.date === todayStr);
+    if (!plan) continue;
+    const tmpl = resolveTemplate(plan.templateId);
+    if (!tmpl || !liftingTypes.has(tmpl.type)) continue;
+
+    const totalPlanned = tmpl.exercises.reduce((sum, e) => sum + e.sets, 0);
+    let totalHit = 0;
+    for (const plannedEx of tmpl.exercises) {
+      const baseKey = normalizeExerciseName(plannedEx.name);
+      const actual = session.exercises.find(e => normalizeExerciseName(e.name) === baseKey);
+      if (!actual || actual.isSkipped) continue;
+      const validSets = actual.sets.filter(s => !s.skipped && s.reps > 0).length;
+      totalHit += Math.min(validSets, plannedEx.sets);
+    }
+    const isPerfect = totalPlanned > 0 && totalHit >= totalPlanned;
+
+    const newStreak = getCurrentStreak();
+    const milestoneHit = newStreak > prevStreak && [3,5,10,25,50,100].includes(newStreak);
+
+    if (isPerfect && milestoneHit) {
+      showCelebration({
+        icon: newStreak >= 10 ? '🔥🔥' : '🔥',
+        title: `${newStreak}-workout streak!`,
+        sub: `${tmpl.name} · ${totalHit}/${totalPlanned} sets`,
+        detail: 'PERFECT WORKOUT · STREAK MILESTONE',
+      });
+    } else if (isPerfect) {
+      showCelebration({
+        icon: '🎯',
+        title: 'Workout Complete!',
+        sub: `${tmpl.name} · ${totalHit}/${totalPlanned} sets`,
+        detail: newStreak >= 2 ? `${newStreak}-workout streak` : 'PERFECT WORKOUT',
+      });
+    } else if (milestoneHit) {
+      showCelebration({
+        icon: '🔥',
+        title: `${newStreak}-workout streak!`,
+        sub: `${tmpl.name} · ${totalHit}/${totalPlanned} sets`,
+        detail: 'STREAK MILESTONE',
+      });
+    }
+    return; // celebrate once per save
+  }
 }
 
 function showToast(msg, isError = false) {
