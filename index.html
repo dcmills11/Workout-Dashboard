@@ -3371,7 +3371,7 @@ function formatSetsDisplay(ex) {
 // Per-exercise and per-workout rationale, keyed off WORKOUT_TEMPLATES entries
 const REC_WORKOUTS = [
   { templateId: 'push_bench',    accent: 'var(--accent)',  summary: 'Heavy bench focus with chest hypertrophy work, side delts in moderate range, and tricep isolation. ~16 working sets, 60-75 min.' },
-  { templateId: 'legs_plyo',     accent: 'var(--accent4)', summary: 'Vertical-jump plyometrics first (CNS fresh), then heavy squat + hip-hinge + lunge + isolation + calves. Plyos auto-progress with your meso phase.' },
+  { templateId: 'legs_plyo',     accent: 'var(--accent4)', summary: 'Vertical-jump plyometrics first (CNS fresh, ~3 movements per phase), then heavy squat + hip-hinge + lunge + isolation + calves. The plyo selection below auto-rotates by meso phase — Foundation (Pogo + Box Jumps 12-18" + Broad Jumps), Power (Box Jumps 24" + Broad + Single-Leg Bounds), Reactive (Depth Jumps + Max Box + Hurdle Hops). See Plyometric block below for the full 6-week ramp. Plyos are dropped on deload week.' },
   { templateId: 'pull_back',     accent: 'var(--accent3)', summary: '50/50 horizontal vs vertical pulling (RP back article emphasis), rear delts in two ranges, biceps direct work — back work alone is not enough for biceps per RP.' },
   { templateId: 'push_ohp',      accent: 'var(--accent)',  summary: 'Heavy OHP main lift, heavy compound tricep work (Close-Grip Bench) — RP triceps article wants ~50% heavy distribution. Bonus bicep frequency hit.' },
   { templateId: 'pull_deadlift', accent: 'var(--accent3)', summary: 'Heavy deadlift main lift, then pulled back / glute / hamstring volume from the DL itself. Shorter session — DL is taxing.' },
@@ -3439,27 +3439,38 @@ function renderRecs() {
     ? `Currently <strong style="color:var(--accent)">Week ${week}</strong> of ${meso.totalWeeks || 6} · target <strong style="color:var(--accent3)">${rir.deload ? 'DELOAD' : rir.label + ' RIR'}</strong> · plyo phase: <strong style="color:var(--accent4)">${phase ? phase.charAt(0).toUpperCase()+phase.slice(1) : 'none (deload)'}</strong>`
     : `Set up your mesocycle on the Planner or Overview to see current week targets.`;
 
-  // Renders one workout card from the template + rationale lookup
+  // Renders one workout card from the template + rationale lookup.
+  // Uses resolveTemplate() so legs_plyo / plyo_only show the current meso-phase variant
+  // (matching what the Planner renders for that day).
   const renderWorkout = (item) => {
-    const tmpl = WORKOUT_TEMPLATES[item.templateId];
+    const tmpl = resolveTemplate(item.templateId);
     if (!tmpl) return '';
     const exHtml = tmpl.exercises.map(ex => {
-      const rationale = EXERCISE_RATIONALE[ex.name];
+      const fullName = formatExerciseFullName(ex);
+      const rationale = EXERCISE_RATIONALE[fullName] || EXERCISE_RATIONALE[ex.name];
       const muscleLabel = ex.muscles.length ? ex.muscles.map(m => RP_VOL[m]?.label || m).join(', ') : 'plyo (no direct volume)';
       const setsReps = ex.reps ? `${ex.sets} × ${ex.reps}` : `${ex.sets} sets`;
       return `<div class="rec-exercise">
         <div class="rec-ex-top">
-          <span class="rec-ex-name">${ex.name}</span>
+          <span class="rec-ex-name">${fullName}</span>
           <span class="rec-ex-sets">${setsReps}</span>
         </div>
         <div class="rec-ex-muscles">· ${muscleLabel}</div>
         ${rationale ? `<div class="rec-ex-why">${rationale}</div>` : ''}
       </div>`;
     }).join('');
+    // For phase-resolving templates, show a small badge indicating the active phase
+    const phaseBadge = (item.templateId === 'legs_plyo' || item.templateId === 'plyo_only')
+      && tmpl.id !== item.templateId
+      ? `<span class="pill pill-purple" style="font-size:10px">${tmpl.name}</span>`
+      : '';
     return `<div class="card rec-workout-card" style="border-left:3px solid ${item.accent};margin-bottom:14px">
       <div class="card-header">
         <div class="card-title" style="color:${item.accent}">${tmpl.name}</div>
-        <span class="pill pill-gray">${tmpl.exercises.length} exercises</span>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          ${phaseBadge}
+          <span class="pill pill-gray">${tmpl.exercises.length} exercises</span>
+        </div>
       </div>
       <p class="rec-workout-summary">${item.summary}</p>
       <div class="rec-exercises-list">${exHtml}</div>
