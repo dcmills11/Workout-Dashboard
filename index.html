@@ -5106,6 +5106,7 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
 }
 
 function renderPlanner() {
+  backfillLateCreditScan();  // retroactively detect credit candidates for already-logged sessions
   renderLateCreditBanner();
   renderVolumeGapPanel();
   renderMissedBanner();
@@ -7072,21 +7073,44 @@ function findLateCreditCandidate(session) {
   return candidates[0] || null;
 }
 
+// Loose normalization for late-credit matching: strips protocol suffixes (5/3/1, FSL),
+// set-rep annotations (4x6-8), and parentheticals. Lets "Overhead press" match the
+// template's "Overhead Press 5/3/1" main lift name.
+function normalizeForMatchLoose(name) {
+  return String(name || '').toLowerCase().trim()
+    .replace(/\s*\([^)]*\)/g, '')                    // strip parens
+    .replace(/\s+5\s*\/\s*3\s*\/\s*1\b/gi, '')       // strip "5/3/1"
+    .replace(/\s+fsl\b/gi, '')                       // strip "FSL"
+    .replace(/\s+\d+\s*[xX×]\s*\d+(?:[-–]\d+)?/g, '') // strip set-rep notation
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function computeSessionTemplateMatch(session, tmpl) {
-  const templateBases = new Map();
+  // Build template name lookup using both exact and loose keys, tracking which exercise
+  // is the "main 5/3/1 lift" (the one with 5/3/1 in the *template's* name)
+  const templateLookup = new Map();
   for (const ex of tmpl.exercises) {
-    templateBases.set(normalizeExerciseName(ex.name), ex);
+    const exactKey = normalizeExerciseName(ex.name);
+    const looseKey = normalizeForMatchLoose(ex.name);
+    if (!templateLookup.has(exactKey)) templateLookup.set(exactKey, ex);
+    if (looseKey && !templateLookup.has(looseKey)) templateLookup.set(looseKey, ex);
   }
+
   let matched = 0;
   let mainLiftMatched = false;
   const matchedNames = [];
+
   for (const ex of session.exercises) {
     if (ex.isSkipped || !ex.sets.length) continue;
-    const baseKey = normalizeExerciseName(ex.name);
-    if (templateBases.has(baseKey)) {
+    const exactKey = normalizeExerciseName(ex.name);
+    const looseKey = normalizeForMatchLoose(ex.name);
+    const found = templateLookup.get(exactKey) || templateLookup.get(looseKey);
+    if (found) {
       matched++;
       matchedNames.push(ex.name);
-      if (/5\/3\/1/.test(ex.name)) mainLiftMatched = true;
+      // The "main lift" is determined by the TEMPLATE name (not the user's logged name)
+      if (/5\/3\/1/.test(found.name)) mainLiftMatched = true;
     }
   }
   // 1 main 5/3/1 match = 10; each accessory = 3
@@ -7095,6 +7119,24 @@ function computeSessionTemplateMatch(session, tmpl) {
   // Threshold: only suggest if the main lift matches OR there are 2+ accessory matches
   if (!mainLiftMatched && matched < 2) score = 0;
   return { score, matched, matchedNames, mainLiftMatched };
+}
+
+// Retroactively scan the last few days' sessions vs recent missed plans, and queue any
+// late-credit offers we discover. Runs on every Planner render so newly-deployed match
+// logic catches previously-logged sessions without re-logging them.
+function backfillLateCreditScan() {
+  const sessions = getSessions();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const cutoff = new Date(today); cutoff.setDate(today.getDate() - LATE_CREDIT_WINDOW_DAYS);
+  const todayStr = today.toISOString().split('T')[0];
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const recent = sessions.filter(s => s.date >= cutoffStr && s.date <= todayStr);
+  for (const s of recent) {
+    const candidate = findLateCreditCandidate(s);
+    if (candidate) {
+      addPendingCredit({ ...candidate, sessionDate: s.date });
+    }
+  }
 }
 
 // Storage for pending credit offers (persisted so banner survives reloads)
