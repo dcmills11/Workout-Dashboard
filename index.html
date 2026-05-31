@@ -1105,6 +1105,77 @@ body {
 .conflict-card-notes { font-size: 12px; color: var(--text2); margin-top: 6px; line-height: 1.5; }
 .conflict-card-affected { font-size: 11px; color: var(--accent2); margin-top: 6px; }
 
+/* Claude AI status bar */
+.claude-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--rad);
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text2);
+  flex-wrap: wrap;
+}
+.claude-status.connected { border-color: rgba(107,255,213,0.3); background: rgba(107,255,213,0.04); }
+.claude-status.connected .claude-status-text { color: var(--accent3); }
+.claude-status .claude-status-text strong { font-family: 'Syne', sans-serif; font-weight: 700; }
+.claude-status button {
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--rad);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+.claude-status button:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Claude conversation */
+.claude-conv-msg {
+  padding: 10px 14px;
+  border-radius: var(--rad);
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.claude-conv-msg.user { background: var(--surface2); color: var(--text); border-left: 2px solid var(--border2); }
+.claude-conv-msg.assistant { background: rgba(107,255,213,0.06); color: var(--text); border-left: 2px solid var(--accent3); }
+.claude-conv-msg .label {
+  font-family: 'Syne', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  display: block;
+}
+.claude-conv-msg.user .label { color: var(--text3); }
+.claude-conv-msg.assistant .label { color: var(--accent3); }
+.claude-loading {
+  font-size: 12px;
+  color: var(--text3);
+  font-style: italic;
+  padding: 8px 14px;
+}
+.claude-loading::after {
+  content: '';
+  display: inline-block;
+  width: 0;
+  animation: claude-dots 1.4s steps(4, end) infinite;
+}
+@keyframes claude-dots {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
+  100% { content: ''; }
+}
+
 /* Chat response */
 .meso-chat-parsed {
   background: rgba(107,255,213,0.05);
@@ -1298,14 +1369,15 @@ body {
 
       <div class="section-heading" style="margin-top:24px">Conflict input</div>
       <div class="card" style="margin-bottom:18px">
+        <div id="claude-status-bar"></div>
         <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:12px">
-          Describe a scheduling conflict in your own words. The parser handles common phrases — date ranges ("May 26 to June 1"), single dates ("Wedding May 30"), and types (work trip, vacation, busy). Confirm before applying.
+          Describe a scheduling conflict in your own words. With Claude connected, it handles arbitrary phrasings and can ask follow-up questions if dates are ambiguous.
         </p>
-        <textarea id="meso-chat-input" class="paste-area" placeholder="e.g. 'Out of town May 26 to June 1 for work trip and wedding' or 'Busy Friday June 5 evening'" style="min-height:80px;font-family:'DM Sans',sans-serif;font-size:13px"></textarea>
+        <div id="meso-chat-history"></div>
+        <textarea id="meso-chat-input" class="paste-area" placeholder="e.g. 'Going on a work trip leaving Monday morning, back the following Sunday. Have to drive 4hr Friday for a wedding Saturday' or 'Busy with 10hr shifts Tue-Thu next week'" style="min-height:80px;font-family:'DM Sans',sans-serif;font-size:13px"></textarea>
         <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" onclick="submitMesoChat()">Parse &amp; preview</button>
-          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('meso-chat-input').value='';document.getElementById('meso-chat-response').innerHTML=''">Clear</button>
-          <span style="font-size:11px;color:var(--text3)">Examples: "5/26 - 6/1 work trip" · "wedding Saturday June 6" · "busy Tuesday and Thursday"</span>
+          <button class="btn btn-primary btn-sm" onclick="submitMesoChat()" id="meso-chat-submit">Send</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearMesoChat()">Reset conversation</button>
         </div>
         <div id="meso-chat-response" style="margin-top:14px"></div>
       </div>
@@ -1692,6 +1764,36 @@ body {
     </div>
 
   </main>
+</div>
+
+<!-- CLAUDE API KEY SETUP MODAL -->
+<div class="modal-overlay" id="claude-setup-modal">
+  <div class="modal" style="width:520px">
+    <h2>Connect Claude AI</h2>
+    <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px">
+      Claude can parse arbitrary phrasings — "going to a wedding the weekend of June 6 and won't be lifting Thu through Sun" — and handle follow-up questions across messages. The API key lives in this browser only.
+    </p>
+    <ol style="font-size:13px;color:var(--text2);line-height:1.9;padding-left:22px;margin-bottom:16px">
+      <li>Sign up at <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent3)">console.anthropic.com</a></li>
+      <li>Add credit ($5 covers hundreds of conflict parses)</li>
+      <li>Create a key under <strong style="color:var(--text)">Settings → API keys</strong></li>
+      <li>Paste it below — starts with <code style="background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px">sk-ant-api03-...</code></li>
+    </ol>
+    <div class="form-group">
+      <label class="form-label">API key</label>
+      <input type="password" class="form-input" id="claude-api-key-input" placeholder="sk-ant-api03-..." autocomplete="off">
+    </div>
+    <div style="padding:10px 12px;background:rgba(255,107,107,0.06);border:1px solid rgba(255,107,107,0.2);border-radius:var(--rad);font-size:11px;color:var(--accent2);line-height:1.6;margin-bottom:14px">
+      <strong>Security note:</strong> The key is stored in this browser's localStorage. Anyone with access to this browser can see it. Don't use this on a shared computer.
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost" id="claude-remove-key-btn" onclick="removeClaudeKey()" style="color:var(--accent2);display:none">Remove key</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal('claude-setup-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveClaudeKey()">Save</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- STRUCTURED SESSION EDIT MODAL -->
@@ -5857,6 +5959,8 @@ function renderMesoTab() {
   const wrap = document.getElementById('meso-calendar-wrap');
   const emptyEl = document.getElementById('meso-empty-state');
   if (!wrap || !emptyEl) return;
+  renderClaudeStatus();
+  renderChatHistory();
 
   const cal = buildMesoCalendar();
   if (!cal) {
@@ -6019,6 +6123,298 @@ function markCellConflict(date) {
   showToast('Conflict added');
 }
 
+// ──── CLAUDE AI INTEGRATION ────
+const CLAUDE_KEY_STORAGE = 'forge_anthropic_key';
+const CLAUDE_MODEL = 'claude-sonnet-4-5';
+let _claudeConvHistory = []; // [{ role: 'user'|'assistant', content: string | content_blocks[] }]
+
+function getClaudeKey() {
+  return localStorage.getItem(CLAUDE_KEY_STORAGE) || null;
+}
+
+function openClaudeSetup() {
+  const existing = getClaudeKey();
+  document.getElementById('claude-api-key-input').value = existing || '';
+  document.getElementById('claude-remove-key-btn').style.display = existing ? '' : 'none';
+  document.getElementById('claude-setup-modal').classList.add('open');
+}
+
+function saveClaudeKey() {
+  const key = document.getElementById('claude-api-key-input').value.trim();
+  if (!key) { showToast('Paste a key first', true); return; }
+  if (!key.startsWith('sk-ant-')) {
+    if (!confirm("That doesn't look like an Anthropic key (should start with 'sk-ant-'). Save anyway?")) return;
+  }
+  localStorage.setItem(CLAUDE_KEY_STORAGE, key);
+  closeModal('claude-setup-modal');
+  renderClaudeStatus();
+  showToast('Claude key saved');
+}
+
+function removeClaudeKey() {
+  if (!confirm('Remove the Claude API key from this browser?')) return;
+  localStorage.removeItem(CLAUDE_KEY_STORAGE);
+  closeModal('claude-setup-modal');
+  renderClaudeStatus();
+  showToast('Claude key removed');
+}
+
+function renderClaudeStatus() {
+  const el = document.getElementById('claude-status-bar');
+  if (!el) return;
+  const hasKey = !!getClaudeKey();
+  el.innerHTML = hasKey
+    ? `<div class="claude-status connected"><span class="claude-status-text">✓ <strong>Claude AI connected</strong> · using ${CLAUDE_MODEL}</span><button onclick="openClaudeSetup()">Manage key</button></div>`
+    : `<div class="claude-status"><span class="claude-status-text">🔮 Claude not connected · using local pattern parser (limited). Connect for arbitrary phrasings + follow-up questions.</span><button onclick="openClaudeSetup()">Connect Claude</button></div>`;
+}
+
+function getConflictToolDef() {
+  return {
+    name: 'add_conflicts',
+    description: 'Record one or more scheduling conflicts that affect the user\'s workout calendar. Each conflict represents a date range when they cannot or only partially can work out. Always call this once you have enough info, even if there are multiple distinct conflicts in the same message.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        conflicts: {
+          type: 'array',
+          description: 'One or more date-range conflicts',
+          items: {
+            type: 'object',
+            properties: {
+              start_date: { type: 'string', description: 'Start date YYYY-MM-DD (inclusive)' },
+              end_date: { type: 'string', description: 'End date YYYY-MM-DD (inclusive). Same as start_date for single-day conflicts.' },
+              type: {
+                type: 'string',
+                enum: ['unavailable', 'limited', 'no_gym'],
+                description: 'unavailable = cannot work out at all (wedding, full-day event, sick). limited = could squeeze a short workout (work shifts, evening events). no_gym = traveling without gym access (work trip, vacation away from home)'
+              },
+              notes: { type: 'string', description: 'Short summary of why this conflict exists, in the user\'s phrasing' }
+            },
+            required: ['start_date', 'end_date', 'type', 'notes']
+          }
+        }
+      },
+      required: ['conflicts']
+    }
+  };
+}
+
+function getClaudeSystemPrompt() {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
+  return `You are the workout scheduling assistant inside a fitness dashboard.
+
+CONTEXT
+- Today is ${dayName}, ${todayStr}.
+- The user follows a 6-week mesocycle. Default weekly schedule: Mon Push A (Bench), Tue Volleyball (hard), Wed Pull A, Thu Volleyball (light), Fri Legs + Plyo, Sat Push B (OHP) or Pull B (Deadlift) alternating, Sun Rest.
+- The user describes scheduling conflicts (travel, work, social events) so the app can rearrange workouts.
+
+YOUR JOB
+- Extract structured conflict info and call the add_conflicts tool.
+- If a single message contains multiple distinct conflicts (e.g., work trip Mon-Sun AND a wedding within it AND a flight on Sun), call add_conflicts once with multiple entries in the array.
+- All dates must be future dates from today (${todayStr}) unless the user explicitly says past. If a month is given without a year and that month has already passed this year, assume next year.
+
+CONFLICT TYPES
+- "unavailable" = cannot work out at all (wedding, full-day event, sick, no available time window)
+- "limited" = could fit a short workout (long work shifts, evening conflicts but morning free)
+- "no_gym" = traveling without gym access (work trips, vacations far from home)
+
+WHEN TO ASK A QUESTION INSTEAD
+- If the dates are genuinely ambiguous (e.g., "next week" without specifying which week, OR "in June" with no day) — respond with a brief clarifying question instead of calling the tool. Be concise.
+- Otherwise, prefer to extract a reasonable interpretation and call the tool. The user will see the parsed result and can correct it.
+
+Always call the tool when possible. Keep any text responses short.`;
+}
+
+async function callClaudeAPI(userMessage) {
+  const key = getClaudeKey();
+  if (!key) throw new Error('Claude API key not set');
+
+  _claudeConvHistory.push({ role: 'user', content: userMessage });
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 1024,
+      system: getClaudeSystemPrompt(),
+      tools: [getConflictToolDef()],
+      messages: _claudeConvHistory,
+    }),
+  });
+
+  if (!response.ok) {
+    let detail = '';
+    try { detail = (await response.json()).error?.message || ''; } catch {}
+    // Drop the user message from history if the call failed
+    _claudeConvHistory.pop();
+    if (response.status === 401) throw new Error('Invalid API key (401) — open Manage key to update');
+    if (response.status === 429) throw new Error('Rate limit / out of credit (429) — top up credit at console.anthropic.com');
+    throw new Error(`API error ${response.status}${detail ? ': ' + detail : ''}`);
+  }
+
+  const data = await response.json();
+  _claudeConvHistory.push({ role: 'assistant', content: data.content });
+  return data;
+}
+
+function parseClaudeResult(data) {
+  const blocks = data.content || [];
+  const toolUses = blocks.filter(b => b.type === 'tool_use');
+  if (toolUses.length > 0) {
+    const conflicts = [];
+    for (const tu of toolUses) {
+      if (tu.name === 'add_conflicts' && tu.input && Array.isArray(tu.input.conflicts)) {
+        conflicts.push(...tu.input.conflicts);
+      }
+    }
+    return { type: 'conflicts', conflicts };
+  }
+  // No tool — text response (likely a clarifying question)
+  const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n\n');
+  return { type: 'question', message: text || '(empty response)' };
+}
+
+function renderChatHistory() {
+  const el = document.getElementById('meso-chat-history');
+  if (!el) return;
+  if (!_claudeConvHistory.length) { el.innerHTML = ''; return; }
+  const msgs = _claudeConvHistory.map(m => {
+    if (m.role === 'user') {
+      return `<div class="claude-conv-msg user"><span class="label">You</span>${escapeHtml(m.content)}</div>`;
+    } else {
+      const blocks = Array.isArray(m.content) ? m.content : [];
+      const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n\n');
+      const toolUses = blocks.filter(b => b.type === 'tool_use');
+      let body = text ? escapeHtml(text).replace(/\n/g, '<br>') : '';
+      if (toolUses.length) {
+        for (const tu of toolUses) {
+          const cs = tu.input?.conflicts || [];
+          body += (body ? '<br><br>' : '') + cs.map(c => {
+            const range = c.start_date === c.end_date ? formatDateShort(c.start_date) : `${formatDateShort(c.start_date)} → ${formatDateShort(c.end_date)}`;
+            return `<span style="font-size:11px;color:var(--accent3)">→ <strong>${range}</strong> (${c.type.replace('_',' ')}) · ${escapeHtml(c.notes)}</span>`;
+          }).join('<br>');
+        }
+      }
+      return `<div class="claude-conv-msg assistant"><span class="label">Claude</span>${body || '(empty)'}</div>`;
+    }
+  }).join('');
+  el.innerHTML = msgs;
+}
+
+function clearMesoChat() {
+  _claudeConvHistory = [];
+  document.getElementById('meso-chat-input').value = '';
+  document.getElementById('meso-chat-history').innerHTML = '';
+  document.getElementById('meso-chat-response').innerHTML = '';
+  window._pendingConflicts = null;
+}
+
+async function submitMesoChat() {
+  const inputEl = document.getElementById('meso-chat-input');
+  const responseEl = document.getElementById('meso-chat-response');
+  const submitBtn = document.getElementById('meso-chat-submit');
+  const text = inputEl.value.trim();
+  if (!text) { showToast('Type a description first', true); return; }
+
+  // Fall back to the local parser when no Claude key is set
+  if (!getClaudeKey()) {
+    submitMesoChatLocal(text);
+    return;
+  }
+
+  submitBtn.disabled = true;
+  responseEl.innerHTML = '<div class="claude-loading">Asking Claude</div>';
+  inputEl.value = '';
+  renderChatHistory();
+
+  try {
+    const data = await callClaudeAPI(text);
+    renderChatHistory();
+    const parsed = parseClaudeResult(data);
+
+    if (parsed.type === 'question') {
+      responseEl.innerHTML = ''; // question is shown in chat history; user just types again
+      inputEl.focus();
+    } else if (parsed.type === 'conflicts' && parsed.conflicts.length) {
+      window._pendingConflicts = parsed.conflicts;
+      const cards = parsed.conflicts.map((c, i) => {
+        const range = c.start_date === c.end_date ? formatDateShort(c.start_date) : `${formatDateShort(c.start_date)} → ${formatDateShort(c.end_date)}`;
+        const cal = buildMesoCalendar();
+        const affected = cal ? cal.weeks.flatMap(w => w.days).filter(d => d.date >= c.start_date && d.date <= c.end_date && ['push','pull','legs','plyo'].includes(getSlotType(d.slot))).length : 0;
+        return `<div style="padding:8px 12px;background:var(--surface2);border-radius:var(--rad);margin-bottom:6px;font-size:12px">
+          <strong style="color:var(--text)">${range}</strong> · ${c.type.replace('_',' ')}${affected ? ` · ${affected} lift${affected === 1 ? '' : 's'} affected` : ''}
+          <div style="color:var(--text3);font-size:11px;margin-top:2px">"${escapeHtml(c.notes)}"</div>
+        </div>`;
+      }).join('');
+      responseEl.innerHTML = `<div class="meso-chat-parsed">
+        Claude parsed <strong>${parsed.conflicts.length} conflict${parsed.conflicts.length === 1 ? '' : 's'}</strong>:
+        <div style="margin-top:10px">${cards}</div>
+        <div class="meso-chat-parsed-actions">
+          <button class="btn btn-primary btn-sm" onclick="confirmAddAllConflicts()">Add ${parsed.conflicts.length === 1 ? 'this conflict' : 'all ' + parsed.conflicts.length}</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('meso-chat-response').innerHTML='';window._pendingConflicts=null">Not yet</button>
+        </div>
+      </div>`;
+    } else {
+      responseEl.innerHTML = '<div class="meso-chat-parsed error">Claude responded but didn\'t produce conflict data. Try rephrasing.</div>';
+    }
+  } catch (err) {
+    responseEl.innerHTML = `<div class="meso-chat-parsed error">⚠ ${escapeHtml(err.message)}</div>`;
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+function confirmAddAllConflicts() {
+  const list = window._pendingConflicts || [];
+  if (!list.length) return;
+  for (const c of list) {
+    addConflict({
+      startDate: c.start_date,
+      endDate: c.end_date,
+      type: c.type,
+      notes: c.notes,
+    });
+  }
+  window._pendingConflicts = null;
+  document.getElementById('meso-chat-response').innerHTML = '';
+  // Optionally clear chat so it doesn't pile up
+  clearMesoChat();
+  renderMesoTab();
+  showToast(`Added ${list.length} conflict${list.length === 1 ? '' : 's'}`);
+}
+
+// Renamed: legacy local parser, used as fallback when no Claude key
+function submitMesoChatLocal(text) {
+  const responseEl = document.getElementById('meso-chat-response');
+  const result = parseConflictChat(text);
+  if (result.error) {
+    responseEl.innerHTML = `<div class="meso-chat-parsed error">⚠ ${result.error}</div>`;
+    return;
+  }
+  window._pendingConflict = { startDate: result.startDate, endDate: result.endDate, type: result.type, notes: result.notes };
+  const rangeLabel = result.startDate === result.endDate
+    ? formatDateShort(result.startDate)
+    : `${formatDateShort(result.startDate)} → ${formatDateShort(result.endDate)}`;
+  const cal = buildMesoCalendar();
+  const affected = cal ? cal.weeks.flatMap(w => w.days).filter(d => d.date >= result.startDate && d.date <= result.endDate && ['push','pull','legs','plyo'].includes(getSlotType(d.slot))).length : 0;
+  responseEl.innerHTML = `<div class="meso-chat-parsed">
+    Local parser: <strong>${rangeLabel}</strong> · <strong>${result.type.replace('_',' ')}</strong>${affected ? ` · ${affected} planned lift${affected === 1 ? '' : 's'} affected` : ''}
+    <div style="margin-top:4px;color:var(--text3);font-style:italic">"${escapeHtml(result.notes)}"</div>
+    <div class="meso-chat-parsed-actions">
+      <button class="btn btn-primary btn-sm" onclick="confirmAddConflict()">Add this conflict</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('meso-chat-response').innerHTML='';window._pendingConflict=null">Cancel</button>
+    </div>
+  </div>`;
+}
+
 // ──── CHAT INPUT PARSING ────
 // Tries to extract date(s), conflict type, and notes from free-text input.
 // Returns { startDate, endDate, type, notes } or { error: '...' }.
@@ -6096,31 +6492,8 @@ function extractChatDates(text) {
   return [...dates];
 }
 
-function submitMesoChat() {
-  const text = document.getElementById('meso-chat-input').value;
-  const responseEl = document.getElementById('meso-chat-response');
-  const result = parseConflictChat(text);
-  if (result.error) {
-    responseEl.innerHTML = `<div class="meso-chat-parsed error">⚠ ${result.error}</div>`;
-    return;
-  }
-  // Stash for confirmation
-  window._pendingConflict = { startDate: result.startDate, endDate: result.endDate, type: result.type, notes: result.notes };
-  const rangeLabel = result.startDate === result.endDate
-    ? formatDateShort(result.startDate)
-    : `${formatDateShort(result.startDate)} → ${formatDateShort(result.endDate)}`;
-  // Count workouts that would be affected
-  const cal = buildMesoCalendar();
-  const affected = cal ? cal.weeks.flatMap(w => w.days).filter(d => d.date >= result.startDate && d.date <= result.endDate && ['push','pull','legs','plyo'].includes(getSlotType(d.slot))).length : 0;
-  responseEl.innerHTML = `<div class="meso-chat-parsed">
-    Parsed: <strong>${rangeLabel}</strong> · type <strong>${result.type.replace('_',' ')}</strong>${affected ? ` · ${affected} planned lift${affected === 1 ? '' : 's'} affected` : ''}<br>
-    <em>"${result.notes}"</em>
-    <div class="meso-chat-parsed-actions">
-      <button class="btn btn-primary btn-sm" onclick="confirmAddConflict()">Add this conflict</button>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('meso-chat-response').innerHTML=''">Cancel</button>
-    </div>
-  </div>`;
-}
+// Legacy duplicate of submitMesoChat removed — the Claude-powered version above handles both
+// the AI flow (when a key is configured) and falls back to submitMesoChatLocal() otherwise.
 
 function confirmAddConflict() {
   if (!window._pendingConflict) return;
