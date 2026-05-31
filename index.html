@@ -1176,6 +1176,47 @@ body {
   100% { content: ''; }
 }
 
+/* Editable conflict preview cards (after Claude parsing) */
+.pending-conflict-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent3);
+  border-radius: var(--rad);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  position: relative;
+}
+.pcc-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.pcc-row:last-child { margin-bottom: 0; }
+.pcc-label {
+  font-family: 'Syne', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  min-width: 50px;
+}
+.pcc-select { padding: 5px 10px; font-size: 12px; flex: 1; min-width: 180px; }
+.pcc-date { padding: 5px 10px; font-size: 12px; flex: 0 0 140px; }
+.pcc-notes { padding: 5px 10px; font-size: 12px; flex: 1; }
+.pcc-affected { font-size: 11px; color: var(--accent2); margin-left: auto; }
+.pcc-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--rad);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.pcc-remove:hover { color: var(--accent2); border-color: var(--accent2); }
+
 /* Chat response */
 .meso-chat-parsed {
   background: rgba(107,255,213,0.05);
@@ -6215,10 +6256,12 @@ YOUR JOB
 - If a single message contains multiple distinct conflicts (e.g., work trip Mon-Sun AND a wedding within it AND a flight on Sun), call add_conflicts once with multiple entries in the array.
 - All dates must be future dates from today (${todayStr}) unless the user explicitly says past. If a month is given without a year and that month has already passed this year, assume next year.
 
-CONFLICT TYPES
-- "unavailable" = cannot work out at all (wedding, full-day event, sick, no available time window)
-- "limited" = could fit a short workout (long work shifts, evening conflicts but morning free)
-- "no_gym" = traveling without gym access (work trips, vacations far from home)
+CONFLICT TYPES (be precise — these drive rescheduling)
+- "unavailable" = cannot work out AT ALL — wedding, full-day event, sick, time-blocked from morning to night with zero windows.
+- "limited" = the user HAS some access to equipment or time, just compromised. Examples: hotel gym, basic equipment, time-constrained, can lift but only 30-40 minutes, long work shifts with a small gym window, partial-day commitments. DEFAULT to "limited" any time the user mentions ANY level of gym access (hotel gym, friend's gym, condo gym, garage gym), or being able to squeeze something in.
+- "no_gym" = ZERO equipment access AND traveling. Use ONLY when the user explicitly says no gym whatsoever (e.g., "camping with no equipment", "no gym at all", "nothing available"). If they mention hotel gym — even a bad one — that is "limited", NOT "no_gym".
+
+When in doubt between "limited" and "no_gym": pick "limited". The user can change the type in the preview before saving.
 
 WHEN TO ASK A QUESTION INSTEAD
 - If the dates are genuinely ambiguous (e.g., "next week" without specifying which week, OR "in June" with no day) — respond with a brief clarifying question instead of calling the tool. Be concise.
@@ -6345,19 +6388,10 @@ async function submitMesoChat() {
       inputEl.focus();
     } else if (parsed.type === 'conflicts' && parsed.conflicts.length) {
       window._pendingConflicts = parsed.conflicts;
-      const cards = parsed.conflicts.map((c, i) => {
-        const range = c.start_date === c.end_date ? formatDateShort(c.start_date) : `${formatDateShort(c.start_date)} → ${formatDateShort(c.end_date)}`;
-        const cal = buildMesoCalendar();
-        const affected = cal ? cal.weeks.flatMap(w => w.days).filter(d => d.date >= c.start_date && d.date <= c.end_date && ['push','pull','legs','plyo'].includes(getSlotType(d.slot))).length : 0;
-        return `<div style="padding:8px 12px;background:var(--surface2);border-radius:var(--rad);margin-bottom:6px;font-size:12px">
-          <strong style="color:var(--text)">${range}</strong> · ${c.type.replace('_',' ')}${affected ? ` · ${affected} lift${affected === 1 ? '' : 's'} affected` : ''}
-          <div style="color:var(--text3);font-size:11px;margin-top:2px">"${escapeHtml(c.notes)}"</div>
-        </div>`;
-      }).join('');
       responseEl.innerHTML = `<div class="meso-chat-parsed">
-        Claude parsed <strong>${parsed.conflicts.length} conflict${parsed.conflicts.length === 1 ? '' : 's'}</strong>:
-        <div style="margin-top:10px">${cards}</div>
-        <div class="meso-chat-parsed-actions">
+        <div style="margin-bottom:10px">Claude parsed <strong>${parsed.conflicts.length} conflict${parsed.conflicts.length === 1 ? '' : 's'}</strong> · review and adjust before saving:</div>
+        ${renderPendingConflictCards()}
+        <div class="meso-chat-parsed-actions" style="margin-top:14px">
           <button class="btn btn-primary btn-sm" onclick="confirmAddAllConflicts()">Add ${parsed.conflicts.length === 1 ? 'this conflict' : 'all ' + parsed.conflicts.length}</button>
           <button class="btn btn-ghost btn-sm" onclick="document.getElementById('meso-chat-response').innerHTML='';window._pendingConflicts=null">Not yet</button>
         </div>
@@ -6369,6 +6403,75 @@ async function submitMesoChat() {
     responseEl.innerHTML = `<div class="meso-chat-parsed error">⚠ ${escapeHtml(err.message)}</div>`;
   } finally {
     submitBtn.disabled = false;
+  }
+}
+
+// Render the editable preview cards. Each card has type dropdown, date inputs, and notes textarea.
+function renderPendingConflictCards() {
+  const list = window._pendingConflicts || [];
+  return list.map((c, i) => {
+    const cal = buildMesoCalendar();
+    const affected = cal ? cal.weeks.flatMap(w => w.days).filter(d => d.date >= c.start_date && d.date <= c.end_date && ['push','pull','legs','plyo'].includes(getSlotType(d.slot))).length : 0;
+    return `<div class="pending-conflict-card" data-idx="${i}">
+      <div class="pcc-row">
+        <label class="pcc-label">Type</label>
+        <select class="form-select pcc-select" onchange="updatePendingConflictField(${i},'type',this.value)">
+          <option value="unavailable" ${c.type === 'unavailable' ? 'selected' : ''}>unavailable — no workout at all</option>
+          <option value="limited" ${c.type === 'limited' ? 'selected' : ''}>limited — short workout / hotel gym / compressed time</option>
+          <option value="no_gym" ${c.type === 'no_gym' ? 'selected' : ''}>no gym — zero equipment</option>
+        </select>
+      </div>
+      <div class="pcc-row pcc-dates">
+        <label class="pcc-label">Dates</label>
+        <input type="date" class="form-input pcc-date" value="${c.start_date}" onchange="updatePendingConflictField(${i},'start_date',this.value)">
+        <span style="color:var(--text3)">→</span>
+        <input type="date" class="form-input pcc-date" value="${c.end_date}" onchange="updatePendingConflictField(${i},'end_date',this.value)">
+        <span class="pcc-affected" id="pcc-affected-${i}">${affected ? `${affected} lift${affected === 1 ? '' : 's'} affected` : 'no lifts in range'}</span>
+      </div>
+      <div class="pcc-row">
+        <label class="pcc-label">Notes</label>
+        <input type="text" class="form-input pcc-notes" value="${escapeHtml(c.notes)}" oninput="updatePendingConflictField(${i},'notes',this.value)">
+      </div>
+      ${list.length > 1 ? `<button class="pcc-remove" onclick="removePendingConflict(${i})" title="Remove">×</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function updatePendingConflictField(idx, field, value) {
+  if (!window._pendingConflicts || !window._pendingConflicts[idx]) return;
+  window._pendingConflicts[idx][field] = value;
+  // If dates changed, refresh the affected count for this card without full re-render (preserves cursor)
+  if (field === 'start_date' || field === 'end_date') {
+    const c = window._pendingConflicts[idx];
+    const cal = buildMesoCalendar();
+    const affected = cal ? cal.weeks.flatMap(w => w.days).filter(d => d.date >= c.start_date && d.date <= c.end_date && ['push','pull','legs','plyo'].includes(getSlotType(d.slot))).length : 0;
+    const aEl = document.getElementById(`pcc-affected-${idx}`);
+    if (aEl) aEl.textContent = affected ? `${affected} lift${affected === 1 ? '' : 's'} affected` : 'no lifts in range';
+  }
+}
+
+function removePendingConflict(idx) {
+  if (!window._pendingConflicts) return;
+  window._pendingConflicts.splice(idx, 1);
+  // Re-render the preview section
+  const responseEl = document.getElementById('meso-chat-response');
+  if (!window._pendingConflicts.length) {
+    responseEl.innerHTML = '';
+    window._pendingConflicts = null;
+  } else {
+    // Locate the cards container and replace
+    const cardsHost = responseEl.querySelector('.meso-chat-parsed');
+    if (cardsHost) {
+      const newCards = renderPendingConflictCards();
+      // Rebuild the inner wrapper
+      const list = window._pendingConflicts;
+      cardsHost.innerHTML = `<div style="margin-bottom:10px">Claude parsed <strong>${list.length} conflict${list.length === 1 ? '' : 's'}</strong> · review and adjust before saving:</div>
+        ${newCards}
+        <div class="meso-chat-parsed-actions" style="margin-top:14px">
+          <button class="btn btn-primary btn-sm" onclick="confirmAddAllConflicts()">Add ${list.length === 1 ? 'this conflict' : 'all ' + list.length}</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('meso-chat-response').innerHTML='';window._pendingConflicts=null">Not yet</button>
+        </div>`;
+    }
   }
 }
 
