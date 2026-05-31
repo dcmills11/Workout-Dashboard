@@ -388,7 +388,44 @@ body {
 .missed-card-date { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
 .missed-card-name { font-weight: 600; font-size: 14px; margin-top: 3px; }
 .missed-card-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
-.missed-card-actions { display: flex; gap: 8px; }
+.missed-card-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.missed-toggle-btn {
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: var(--rad);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+.missed-toggle-btn:hover { color: var(--accent); border-color: var(--accent); }
+.missed-card-detail { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.missed-card-detail.open { display: block; }
+.missed-ex-row {
+  display: flex;
+  gap: 12px;
+  padding: 7px 2px;
+  font-size: 12px;
+  align-items: baseline;
+  border-bottom: 1px dashed var(--border);
+  flex-wrap: wrap;
+}
+.missed-ex-row:last-child { border-bottom: none; }
+.missed-ex-num { color: var(--text3); font-family: 'Syne', sans-serif; font-weight: 700; font-size: 11px; flex: 0 0 18px; }
+.missed-ex-name { color: var(--text); font-weight: 500; flex: 1; min-width: 180px; }
+.missed-ex-name .missed-ex-var { font-size: 10px; color: var(--accent4); margin-left: 4px; padding: 1px 6px; background: rgba(160,107,255,0.1); border-radius: 99px; vertical-align: middle; }
+.missed-ex-sets { color: var(--accent); font-family: 'Syne', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.02em; flex: 0 0 auto; }
+.missed-ex-muscles { color: var(--text3); font-size: 11px; flex: 0 0 auto; }
+.missed-detail-footer {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 11px;
+  color: var(--text3);
+  text-align: right;
+}
+
 .missed-makeup { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
 .missed-makeup-prompt { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
 .missed-makeup-option {
@@ -4175,6 +4212,15 @@ function applyMakeupOption(missedDate, optIdx) {
   showToast(opt.action === 'skip' ? 'Marked as skipped' : `Made up on ${formatDateShort(opt.targetDate)}`);
 }
 
+function toggleMissedExercises(date) {
+  const detail = document.getElementById(`missed-detail-${date}`);
+  const toggle = document.getElementById(`missed-toggle-${date}`);
+  if (!detail) return;
+  detail.classList.toggle('open');
+  const isOpen = detail.classList.contains('open');
+  if (toggle) toggle.textContent = isOpen ? 'Hide exercises ▴' : 'Show exercises ▾';
+}
+
 function logMissedWorkout(missedDate) {
   // Navigate to Log → Import tab
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -4208,6 +4254,23 @@ function renderMissedBanner() {
 
   const cards = missed.map(m => {
     const totalSets = m.template.exercises.reduce((sum, e) => sum + e.sets, 0);
+    const exerciseListHtml = m.template.exercises.map((ex, idx) => {
+      const fullName = formatExerciseFullName(ex);
+      const variationBadge = ex.variation ? `<span class="missed-ex-var">${ex.variation}</span>` : '';
+      // Strip variation from name so we can show it as a badge instead
+      const baseDisplay = ex.name;
+      const setsReps = ex.reps ? `${ex.sets} × ${ex.reps}` : `${ex.sets} sets`;
+      const muscleLabel = ex.muscles.length
+        ? ex.muscles.map(mm => RP_VOL[mm]?.label || mm).join(', ')
+        : 'no direct muscle';
+      return `<div class="missed-ex-row">
+        <span class="missed-ex-num">${idx + 1}.</span>
+        <span class="missed-ex-name">${baseDisplay}${variationBadge}</span>
+        <span class="missed-ex-sets">${setsReps}</span>
+        <span class="missed-ex-muscles">${muscleLabel}</span>
+      </div>`;
+    }).join('');
+
     return `<div class="missed-card">
       <div class="missed-card-header">
         <div class="missed-card-info">
@@ -4218,7 +4281,12 @@ function renderMissedBanner() {
         <div class="missed-card-actions">
           <button class="btn btn-primary btn-sm" onclick="logMissedWorkout('${m.date}')">Log it</button>
           <button class="btn btn-ghost btn-sm" onclick="markSkippedWithOptions('${m.date}', '${m.templateId}')">Mark skipped</button>
+          <button class="missed-toggle-btn" id="missed-toggle-${m.date}" onclick="toggleMissedExercises('${m.date}')">Show exercises ▾</button>
         </div>
+      </div>
+      <div class="missed-card-detail" id="missed-detail-${m.date}">
+        ${exerciseListHtml}
+        <div class="missed-detail-footer">${m.template.exercises.length} exercises · ${totalSets} sets planned</div>
       </div>
       <div id="missed-options-${m.date}"></div>
     </div>`;
