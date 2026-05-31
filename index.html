@@ -973,6 +973,152 @@ body {
   text-decoration: underline;
 }
 
+/* CURRENT MESO CALENDAR */
+.meso-cal-table { width: 100%; border-collapse: separate; border-spacing: 4px; margin-bottom: 14px; }
+.meso-cal-table th {
+  padding: 6px;
+  font-family: 'Syne', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  text-align: center;
+}
+.meso-cal-table th.meso-cal-rowhead { text-align: left; padding-left: 0; }
+.meso-cal-row-label {
+  font-family: 'Syne', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  padding: 4px 8px 4px 0;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.meso-cal-row-label.deload { color: var(--accent); }
+.meso-cal-row-label .rir { display: block; font-size: 9px; color: var(--text3); font-weight: 500; letter-spacing: 0.06em; }
+
+.meso-cal-cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--rad);
+  padding: 8px 8px 6px;
+  height: 76px;
+  cursor: pointer;
+  position: relative;
+  vertical-align: top;
+  transition: background 0.15s, border-color 0.15s;
+}
+.meso-cal-cell:hover { background: var(--surface2); border-color: var(--border2); }
+.meso-cal-cell.today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.meso-cal-cell.past { opacity: 0.55; }
+.meso-cal-cell.has-conflict {
+  background: repeating-linear-gradient(45deg, var(--surface), var(--surface) 6px, rgba(255,107,107,0.13) 6px, rgba(255,107,107,0.13) 12px);
+  border-color: rgba(255,107,107,0.4);
+}
+.meso-cal-cell.completed { border-color: var(--accent3); box-shadow: inset 0 0 0 1px rgba(107,255,213,0.3); }
+.meso-cal-cell.empty { background: rgba(255,255,255,0.015); border-style: dashed; }
+
+.meso-cal-date { position: absolute; top: 4px; right: 6px; font-size: 9px; color: var(--text3); }
+.meso-cal-slot {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: 'Syne', sans-serif;
+  letter-spacing: 0.04em;
+  margin-top: 12px;
+}
+.meso-cal-slot.push { color: var(--accent); }
+.meso-cal-slot.pull { color: var(--accent3); }
+.meso-cal-slot.legs { color: var(--accent4); }
+.meso-cal-slot.vb { color: #7ab8ff; }
+.meso-cal-slot.vb-hard { color: #ff9a7a; }
+.meso-cal-slot.run { color: #7affb8; }
+.meso-cal-slot.rest { color: var(--text3); }
+.meso-cal-slot.empty { color: var(--text3); font-weight: 400; font-style: italic; }
+
+.meso-cal-status {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  font-size: 10px;
+}
+.meso-cal-status.completed { color: var(--accent3); }
+.meso-cal-status.conflict { color: var(--accent2); }
+
+.meso-cal-deload-row .meso-cal-cell { background: rgba(232,255,107,0.03); }
+
+/* Cell action menu */
+.meso-cell-menu {
+  position: absolute;
+  z-index: 200;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--rad-lg);
+  padding: 8px;
+  min-width: 220px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+.meso-cell-menu-section {
+  font-family: 'Syne', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  padding: 6px 8px 4px;
+}
+.meso-cell-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: var(--rad);
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+}
+.meso-cell-menu-item:hover { background: var(--surface2); }
+.meso-cell-menu-item.danger { color: var(--accent2); }
+.meso-cell-menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* Conflict list cards */
+.conflict-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent2);
+  border-radius: var(--rad);
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.conflict-card-info { flex: 1; }
+.conflict-card-range { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; }
+.conflict-card-type { font-size: 11px; color: var(--text3); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+.conflict-card-notes { font-size: 12px; color: var(--text2); margin-top: 6px; line-height: 1.5; }
+.conflict-card-affected { font-size: 11px; color: var(--accent2); margin-top: 6px; }
+
+/* Chat response */
+.meso-chat-parsed {
+  background: rgba(107,255,213,0.05);
+  border: 1px solid rgba(107,255,213,0.2);
+  border-radius: var(--rad);
+  padding: 12px 14px;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+.meso-chat-parsed.error { background: rgba(255,107,107,0.06); border-color: rgba(255,107,107,0.25); color: var(--accent2); }
+.meso-chat-parsed strong { color: var(--text); }
+.meso-chat-parsed-actions { margin-top: 10px; display: flex; gap: 8px; }
+
 /* STREAK BAR */
 .streak-bar {
   display: inline-flex;
@@ -1112,6 +1258,7 @@ body {
     <div class="nav-section">
       <div class="nav-label">Training</div>
       <button class="nav-item active" onclick="showPage('planner',this)"><span class="ico">⊞</span> Planner</button>
+      <button class="nav-item" onclick="showPage('meso',this)"><span class="ico">▦</span> Current Meso</button>
       <button class="nav-item" onclick="showPage('overview',this)"><span class="ico">◈</span> Overview</button>
       <button class="nav-item" onclick="showPage('log',this)"><span class="ico">✦</span> Workout Log</button>
       <button class="nav-item" onclick="showPage('volume',this)"><span class="ico">▣</span> Volume Tracker</button>
@@ -1135,6 +1282,37 @@ body {
   </nav>
 
   <main class="main">
+
+    <!-- ===== CURRENT MESO ===== -->
+    <div class="page" id="page-meso">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>Current Mesocycle</h1>
+          <p>6-week calendar with scheduling conflicts and rearrangement</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="openMesoModal()">Edit meso settings</button>
+      </div>
+
+      <div id="meso-empty-state"></div>
+      <div id="meso-calendar-wrap"></div>
+
+      <div class="section-heading" style="margin-top:24px">Conflict input</div>
+      <div class="card" style="margin-bottom:18px">
+        <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:12px">
+          Describe a scheduling conflict in your own words. The parser handles common phrases — date ranges ("May 26 to June 1"), single dates ("Wedding May 30"), and types (work trip, vacation, busy). Confirm before applying.
+        </p>
+        <textarea id="meso-chat-input" class="paste-area" placeholder="e.g. 'Out of town May 26 to June 1 for work trip and wedding' or 'Busy Friday June 5 evening'" style="min-height:80px;font-family:'DM Sans',sans-serif;font-size:13px"></textarea>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="submitMesoChat()">Parse &amp; preview</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('meso-chat-input').value='';document.getElementById('meso-chat-response').innerHTML=''">Clear</button>
+          <span style="font-size:11px;color:var(--text3)">Examples: "5/26 - 6/1 work trip" · "wedding Saturday June 6" · "busy Tuesday and Thursday"</span>
+        </div>
+        <div id="meso-chat-response" style="margin-top:14px"></div>
+      </div>
+
+      <div class="section-heading">Active conflicts</div>
+      <div id="meso-conflicts-list"></div>
+    </div>
 
     <!-- ===== OVERVIEW ===== -->
     <div class="page" id="page-overview">
@@ -5004,6 +5182,7 @@ function showPage(name, btn) {
   if (name === 'strength')  renderStrengthChart();
   if (name === 'recommend') renderRecs();
   if (name === 'planner')   renderPlanner();
+  if (name === 'meso')      renderMesoTab();
   if (name === 'exercises') renderExercises();
   if (name === 'bodycomp')  renderBodyComp();
   updateFabBadge();
@@ -5564,6 +5743,393 @@ function updateFabBadge() {
   badge.textContent = count;
   if (count > 0) badge.classList.add('show');
   else badge.classList.remove('show');
+}
+
+// ─── CURRENT MESO TAB ────────────────────────────────────────────────────────
+// Conflict objects stored in data.conflicts:
+//   { id, startDate, endDate, type: 'unavailable'|'limited'|'no_gym', notes }
+
+function getConflicts() { return loadData().conflicts || []; }
+
+function addConflict(conflict) {
+  const data = loadData();
+  if (!data.conflicts) data.conflicts = [];
+  conflict.id = conflict.id || 'c-' + Date.now();
+  data.conflicts.push(conflict);
+  saveData(data);
+}
+
+function removeConflict(id) {
+  const data = loadData();
+  if (!data.conflicts) return;
+  data.conflicts = data.conflicts.filter(c => c.id !== id);
+  saveData(data);
+}
+
+// Default workout slot for a day-of-week (matches suggestPlannerWeek)
+function defaultSlotForDow(dow, satIsPushB) {
+  switch (dow) {
+    case 1: return 'push_bench';
+    case 2: return 'volleyball_hard';
+    case 3: return 'pull_back';
+    case 4: return 'volleyball_light';
+    case 5: return 'legs_plyo';
+    case 6: return satIsPushB ? 'push_ohp' : 'pull_deadlift';
+    case 0: return 'rest';
+  }
+  return 'rest';
+}
+
+function getSlotType(slotId) {
+  if (!slotId) return 'empty';
+  const t = WORKOUT_TEMPLATES[slotId];
+  if (!t) return 'empty';
+  return t.type;
+}
+
+function getSlotShortLabel(slotId) {
+  const labels = {
+    push_bench: 'PUSH A', push_ohp: 'PUSH B',
+    pull_back: 'PULL A', pull_deadlift: 'PULL B',
+    legs: 'LEGS', legs_plyo: 'LEGS + PLYO',
+    plyo_only: 'PLYO',
+    volleyball_hard: 'VB HARD', volleyball_light: 'VB LIGHT',
+    run: 'RUN', rest: 'REST',
+  };
+  return labels[slotId] || (WORKOUT_TEMPLATES[slotId]?.name || slotId);
+}
+
+// Build the meso calendar — uses mesocycle.startDate, plan entries, sessions, and conflicts
+function buildMesoCalendar() {
+  const m = getMesocycle();
+  if (!m || !m.startDate) return null;
+
+  const totalWeeks = m.totalWeeks || 6;
+  const startMonday = new Date(m.startDate + 'T12:00:00');
+  // Normalize to Monday if not already
+  const startDow = startMonday.getDay() === 0 ? 7 : startMonday.getDay();
+  startMonday.setDate(startMonday.getDate() - (startDow - 1));
+
+  const plans = getPlans();
+  const planMap = {};
+  for (const p of plans) planMap[p.date] = p;
+  const sessionMap = getSessionMap();
+  const conflicts = getConflicts();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
+
+  const weeks = [];
+  // Alternate satIsPushB across weeks (Week A first)
+  let satIsPushB = true;
+  for (let w = 0; w < totalWeeks; w++) {
+    const week = { num: w + 1, days: [] };
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(startMonday);
+      day.setDate(startMonday.getDate() + w * 7 + d);
+      const iso = day.toISOString().split('T')[0];
+      const dow = day.getDay(); // 0=Sun..6=Sat
+
+      const planEntry = planMap[iso];
+      const slot = planEntry && planEntry.templateId !== 'none'
+        ? planEntry.templateId
+        : defaultSlotForDow(dow, satIsPushB);
+      const conflict = conflicts.find(c => iso >= c.startDate && iso <= c.endDate);
+      const session = sessionMap[iso];
+
+      week.days.push({
+        date: iso,
+        dow,
+        slot,
+        isPlanned: !!planEntry,
+        isCompleted: !!session,
+        isToday: iso === todayStr,
+        isPast: day < today,
+        conflict,
+      });
+    }
+    weeks.push(week);
+    satIsPushB = !satIsPushB;
+  }
+  return { startDate: startMonday.toISOString().split('T')[0], totalWeeks, weeks };
+}
+
+function renderMesoTab() {
+  const wrap = document.getElementById('meso-calendar-wrap');
+  const emptyEl = document.getElementById('meso-empty-state');
+  if (!wrap || !emptyEl) return;
+
+  const cal = buildMesoCalendar();
+  if (!cal) {
+    wrap.innerHTML = '';
+    emptyEl.innerHTML = `<div class="card" style="margin-bottom:18px;text-align:center;padding:30px"><p style="font-size:13px;color:var(--text2);margin-bottom:14px">Set up your mesocycle to see the 6-week calendar.</p><button class="btn btn-primary btn-sm" onclick="openMesoModal()">Set up mesocycle</button></div>`;
+    document.getElementById('meso-conflicts-list').innerHTML = '';
+    return;
+  }
+  emptyEl.innerHTML = '';
+
+  const dayHeaders = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  let html = `<table class="meso-cal-table"><thead><tr><th class="meso-cal-rowhead"></th>${dayHeaders.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>`;
+
+  for (const week of cal.weeks) {
+    const isDeload = week.num === cal.totalWeeks;
+    const rir = getRIRForWeek(week.num, cal.totalWeeks);
+    const rirLabel = rir.deload ? 'DELOAD' : `${rir.label} RIR`;
+    html += `<tr class="${isDeload ? 'meso-cal-deload-row' : ''}">
+      <td class="meso-cal-row-label ${isDeload ? 'deload' : ''}">Wk ${week.num}<span class="rir">${rirLabel}</span></td>
+      ${week.days.map(d => {
+        const sType = getSlotType(d.slot);
+        const slotLabel = getSlotShortLabel(d.slot);
+        const dispDate = d.date.split('-')[2];
+        const cellCls = [
+          'meso-cal-cell',
+          d.isToday ? 'today' : '',
+          d.isPast && !d.isCompleted ? 'past' : '',
+          d.conflict ? 'has-conflict' : '',
+          d.isCompleted ? 'completed' : '',
+        ].filter(Boolean).join(' ');
+        const status = d.isCompleted ? '<span class="meso-cal-status completed">✓</span>'
+                     : d.conflict ? '<span class="meso-cal-status conflict">⚠</span>'
+                     : '';
+        return `<td class="${cellCls}" onclick="openMesoCellMenu(event,'${d.date}')">
+          <span class="meso-cal-date">${dispDate}</span>
+          <span class="meso-cal-slot ${sType === 'vb' && d.slot === 'volleyball_hard' ? 'vb-hard' : sType}">${slotLabel}</span>
+          ${status}
+        </td>`;
+      }).join('')}
+    </tr>`;
+  }
+  html += '</tbody></table>';
+
+  // Legend
+  html += `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text3);margin-bottom:18px">
+    <span><span style="color:var(--accent);font-weight:700">PUSH</span> Bench/OHP</span>
+    <span><span style="color:var(--accent3);font-weight:700">PULL</span> Back/Deadlift</span>
+    <span><span style="color:var(--accent4);font-weight:700">LEGS</span> Squat+Plyo</span>
+    <span><span style="color:#7ab8ff;font-weight:700">VB</span> Volleyball</span>
+    <span>✓ Completed</span>
+    <span style="color:var(--accent2)">⚠ Conflict</span>
+  </div>`;
+
+  wrap.innerHTML = html;
+  renderConflictsList();
+}
+
+function renderConflictsList() {
+  const el = document.getElementById('meso-conflicts-list');
+  if (!el) return;
+  const conflicts = getConflicts().sort((a, b) => a.startDate.localeCompare(b.startDate));
+  if (!conflicts.length) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:14px 0;font-style:italic">No conflicts yet. Use the chat input above to add scheduling conflicts.</div>';
+    return;
+  }
+  el.innerHTML = conflicts.map(c => {
+    const rangeLabel = c.startDate === c.endDate
+      ? formatDateShort(c.startDate)
+      : `${formatDateShort(c.startDate)} → ${formatDateShort(c.endDate)}`;
+    // Count affected workouts
+    const cal = buildMesoCalendar();
+    const affected = cal ? cal.weeks.flatMap(w => w.days).filter(d => d.date >= c.startDate && d.date <= c.endDate && ['push','pull','legs','plyo'].includes(getSlotType(d.slot))).length : 0;
+    return `<div class="conflict-card">
+      <div class="conflict-card-info">
+        <div class="conflict-card-range">${rangeLabel}</div>
+        <div class="conflict-card-type">${c.type.replace('_',' ')}</div>
+        ${c.notes ? `<div class="conflict-card-notes">${c.notes}</div>` : ''}
+        ${affected > 0 ? `<div class="conflict-card-affected">${affected} planned workout${affected === 1 ? '' : 's'} affected</div>` : ''}
+      </div>
+      <button class="btn btn-ghost btn-sm" style="color:var(--accent2)" onclick="deleteConflict('${c.id}')">Remove</button>
+    </div>`;
+  }).join('');
+}
+
+function deleteConflict(id) {
+  removeConflict(id);
+  renderMesoTab();
+  showToast('Conflict removed');
+}
+
+// Cell action menu
+let _mesoMenuOpenDate = null;
+function openMesoCellMenu(evt, date) {
+  evt.stopPropagation();
+  closeMesoCellMenu();
+  _mesoMenuOpenDate = date;
+
+  const conflict = getConflicts().find(c => date >= c.startDate && date <= c.endDate);
+  const planEntry = getPlans().find(p => p.date === date);
+  const currentSlot = planEntry?.templateId;
+
+  const menu = document.createElement('div');
+  menu.className = 'meso-cell-menu';
+  menu.id = 'meso-cell-menu';
+
+  let inner = `<div class="meso-cell-menu-section">${formatDateShort(date)}</div>`;
+  inner += `<div class="meso-cell-menu-section">Change workout</div>`;
+  for (const id of TEMPLATE_ORDER) {
+    const t = WORKOUT_TEMPLATES[id];
+    inner += `<button class="meso-cell-menu-item ${currentSlot === id ? 'active' : ''}" onclick="setMesoCellSlot('${date}','${id}')">${t.name}</button>`;
+  }
+  inner += `<div class="meso-cell-menu-divider"></div>`;
+  if (conflict) {
+    inner += `<button class="meso-cell-menu-item danger" onclick="deleteConflict('${conflict.id}')">Remove conflict (${formatDateShort(conflict.startDate)} → ${formatDateShort(conflict.endDate)})</button>`;
+  } else {
+    inner += `<button class="meso-cell-menu-item" onclick="markCellConflict('${date}')">Mark this day as conflict</button>`;
+  }
+  if (planEntry) {
+    inner += `<button class="meso-cell-menu-item danger" onclick="clearPlanForDate('${date}')">Reset to default for this day</button>`;
+  }
+  menu.innerHTML = inner;
+
+  // Position near cursor
+  document.body.appendChild(menu);
+  const rect = evt.target.closest('td').getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.top = (rect.bottom + 4) + 'px';
+  menu.style.left = Math.min(rect.left, window.innerWidth - 240) + 'px';
+
+  // Close on outside click
+  setTimeout(() => document.addEventListener('click', closeMesoCellMenu, { once: true }), 0);
+}
+
+function closeMesoCellMenu() {
+  const m = document.getElementById('meso-cell-menu');
+  if (m) m.remove();
+  _mesoMenuOpenDate = null;
+}
+
+function setMesoCellSlot(date, templateId) {
+  setPlanForDate(date, templateId);  // existing helper writes to data.plan
+  closeMesoCellMenu();
+  renderMesoTab();
+  showToast(`Set ${formatDateShort(date)} to ${WORKOUT_TEMPLATES[templateId]?.name || templateId}`);
+}
+
+function clearPlanForDate(date) {
+  const data = loadData();
+  if (!data.plan) return;
+  data.plan = data.plan.filter(p => p.date !== date);
+  saveData(data);
+  closeMesoCellMenu();
+  renderMesoTab();
+}
+
+function markCellConflict(date) {
+  addConflict({ startDate: date, endDate: date, type: 'unavailable', notes: 'Manually marked' });
+  closeMesoCellMenu();
+  renderMesoTab();
+  showToast('Conflict added');
+}
+
+// ──── CHAT INPUT PARSING ────
+// Tries to extract date(s), conflict type, and notes from free-text input.
+// Returns { startDate, endDate, type, notes } or { error: '...' }.
+function parseConflictChat(text) {
+  const lower = text.trim().toLowerCase();
+  if (!lower) return { error: 'Type a description first' };
+
+  const dates = extractChatDates(text);
+  if (!dates.length) return { error: "Couldn't find any dates in that. Try formats like 'May 26', '5/26', '5/26 - 6/1', or 'June 5 to June 8'." };
+
+  // Sort and dedupe dates
+  dates.sort((a, b) => a.localeCompare(b));
+  const startDate = dates[0];
+  const endDate = dates[dates.length - 1];
+
+  // Type classification
+  let type = 'unavailable';
+  if (/work\s+(shift|day)|10\s*hr|9\s*hr|8\s*hr|hour\s+shift|night\s+shift/i.test(text)) type = 'limited';
+  else if (/no\s+gym|hotel|travel|business\s+trip|out\s+of\s+town|away/i.test(text)) type = 'no_gym';
+  else type = 'unavailable';
+
+  return { startDate, endDate, type, notes: text.trim() };
+}
+
+// Extract YYYY-MM-DD strings from any common date format in the input
+function extractChatDates(text) {
+  const dates = new Set();
+  const monthNames = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  const currentYear = new Date().getFullYear();
+
+  // Month name + day patterns: "May 26", "June 1", "May 26-30", "May 26 to June 1"
+  const monthDayRe = /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:\s*[-–]\s*(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+)?(\d{1,2}))?/gi;
+  let match;
+  while ((match = monthDayRe.exec(text)) !== null) {
+    const m1 = monthNames[match[1].slice(0, 3).toLowerCase()];
+    const d1 = parseInt(match[2]);
+    if (m1 != null) {
+      const yr1 = (m1 < new Date().getMonth() - 6) ? currentYear + 1 : currentYear; // future-bias
+      dates.add(`${yr1}-${String(m1+1).padStart(2,'0')}-${String(d1).padStart(2,'0')}`);
+    }
+    if (match[4]) {
+      const m2 = match[3] ? monthNames[match[3].slice(0, 3).toLowerCase()] : m1;
+      const d2 = parseInt(match[4]);
+      if (m2 != null) {
+        const yr2 = currentYear;
+        dates.add(`${yr2}-${String(m2+1).padStart(2,'0')}-${String(d2).padStart(2,'0')}`);
+      }
+    }
+  }
+  // "May 26 to June 1" / "May 26 through June 1" — fill in the range
+  const rangeRe = /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})\s+(?:to|through|thru|\-|–)\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})/gi;
+  while ((match = rangeRe.exec(text)) !== null) {
+    const m1 = monthNames[match[1].slice(0, 3).toLowerCase()];
+    const d1 = parseInt(match[2]);
+    const m2 = monthNames[match[3].slice(0, 3).toLowerCase()];
+    const d2 = parseInt(match[4]);
+    if (m1 != null && m2 != null) {
+      dates.add(`${currentYear}-${String(m1+1).padStart(2,'0')}-${String(d1).padStart(2,'0')}`);
+      dates.add(`${currentYear}-${String(m2+1).padStart(2,'0')}-${String(d2).padStart(2,'0')}`);
+    }
+  }
+
+  // Slash format: "5/26", "5/26/26", "5/26 - 6/1"
+  const slashRe = /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g;
+  while ((match = slashRe.exec(text)) !== null) {
+    const mo = parseInt(match[1]) - 1;
+    const d = parseInt(match[2]);
+    let yr = match[3] ? parseInt(match[3]) : currentYear;
+    if (yr < 100) yr += 2000;
+    if (mo >= 0 && mo <= 11 && d >= 1 && d <= 31) {
+      dates.add(`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
+    }
+  }
+
+  return [...dates];
+}
+
+function submitMesoChat() {
+  const text = document.getElementById('meso-chat-input').value;
+  const responseEl = document.getElementById('meso-chat-response');
+  const result = parseConflictChat(text);
+  if (result.error) {
+    responseEl.innerHTML = `<div class="meso-chat-parsed error">⚠ ${result.error}</div>`;
+    return;
+  }
+  // Stash for confirmation
+  window._pendingConflict = { startDate: result.startDate, endDate: result.endDate, type: result.type, notes: result.notes };
+  const rangeLabel = result.startDate === result.endDate
+    ? formatDateShort(result.startDate)
+    : `${formatDateShort(result.startDate)} → ${formatDateShort(result.endDate)}`;
+  // Count workouts that would be affected
+  const cal = buildMesoCalendar();
+  const affected = cal ? cal.weeks.flatMap(w => w.days).filter(d => d.date >= result.startDate && d.date <= result.endDate && ['push','pull','legs','plyo'].includes(getSlotType(d.slot))).length : 0;
+  responseEl.innerHTML = `<div class="meso-chat-parsed">
+    Parsed: <strong>${rangeLabel}</strong> · type <strong>${result.type.replace('_',' ')}</strong>${affected ? ` · ${affected} planned lift${affected === 1 ? '' : 's'} affected` : ''}<br>
+    <em>"${result.notes}"</em>
+    <div class="meso-chat-parsed-actions">
+      <button class="btn btn-primary btn-sm" onclick="confirmAddConflict()">Add this conflict</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('meso-chat-response').innerHTML=''">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function confirmAddConflict() {
+  if (!window._pendingConflict) return;
+  addConflict(window._pendingConflict);
+  window._pendingConflict = null;
+  document.getElementById('meso-chat-input').value = '';
+  document.getElementById('meso-chat-response').innerHTML = '';
+  renderMesoTab();
+  showToast('Conflict added');
 }
 
 // ─── STREAK & CELEBRATION ────────────────────────────────────────────────────
