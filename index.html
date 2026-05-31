@@ -1048,6 +1048,69 @@ body {
 
 .meso-cal-deload-row .meso-cal-cell { background: rgba(232,255,107,0.03); }
 
+/* Drag and drop on meso calendar */
+.meso-cal-cell { user-select: none; }
+.meso-cal-cell.dragging { opacity: 0.35; cursor: grabbing; }
+.meso-cal-cell.drag-over { background: rgba(232,255,107,0.08) !important; border-color: var(--accent) !important; }
+.meso-cal-cell[draggable="true"] { cursor: grab; }
+
+/* Reschedule suggestion panel */
+.reschedule-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent3);
+  border-radius: var(--rad-lg);
+  padding: 16px 20px;
+  margin-bottom: 18px;
+}
+.reschedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.reschedule-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent3);
+  letter-spacing: -0.2px;
+}
+.reschedule-summary { font-size: 12px; color: var(--text2); }
+.reschedule-summary span { margin-right: 14px; }
+.reschedule-changes { display: flex; flex-direction: column; gap: 8px; }
+.reschedule-change {
+  background: var(--surface2);
+  border-radius: var(--rad);
+  padding: 10px 14px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-left: 2px solid var(--border);
+}
+.reschedule-change.move { border-left-color: var(--accent3); }
+.reschedule-change.compress { border-left-color: var(--accent); }
+.reschedule-change.drop { border-left-color: var(--accent2); }
+.reschedule-icon { font-size: 14px; flex: 0 0 18px; }
+.reschedule-text { flex: 1; min-width: 200px; }
+.reschedule-text .from-to { color: var(--text); font-weight: 500; }
+.reschedule-text .rationale { display: block; font-size: 11px; color: var(--text3); margin-top: 3px; }
+.reschedule-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+/* Compressed-workout indicator on calendar cells */
+.meso-cal-cell.compressed::after {
+  content: '✂';
+  position: absolute;
+  bottom: 4px;
+  left: 6px;
+  font-size: 11px;
+  color: var(--accent);
+}
+
 /* Cell action menu */
 .meso-cell-menu {
   position: absolute;
@@ -1406,6 +1469,7 @@ body {
       </div>
 
       <div id="meso-empty-state"></div>
+      <div id="meso-reschedule-suggestion"></div>
       <div id="meso-calendar-wrap"></div>
 
       <div class="section-heading" style="margin-top:24px">Conflict input</div>
@@ -1655,6 +1719,7 @@ body {
           <p>Plan the next 7 days and see projected rolling volume</p>
         </div>
         <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="showPage('meso',document.querySelector('[onclick*=\\'meso\\']'))" style="color:var(--accent3)" title="Edit the full 6-week mesocycle with conflicts">⊞ Current Meso</button>
           <button class="btn btn-ghost btn-sm" onclick="suggestPlannerWeek()" title="Fills empty days with the suggested routine. Preserves any days you've already planned.">Fill empty days</button>
           <button class="btn btn-ghost btn-sm" onclick="resetPlannerWeek()" title="Wipe the next 7 days and apply the suggested routine fresh.">Reset week</button>
           <button class="btn btn-ghost btn-sm" style="color:var(--accent2)" onclick="clearPlan()">Clear plan</button>
@@ -6035,7 +6100,7 @@ function renderMesoTab() {
         const status = d.isCompleted ? '<span class="meso-cal-status completed">✓</span>'
                      : d.conflict ? '<span class="meso-cal-status conflict">⚠</span>'
                      : '';
-        return `<td class="${cellCls}" onclick="openMesoCellMenu(event,'${d.date}')">
+        return `<td class="${cellCls}" data-date="${d.date}" onclick="openMesoCellMenu(event,'${d.date}')">
           <span class="meso-cal-date">${dispDate}</span>
           <span class="meso-cal-slot ${sType === 'vb' && d.slot === 'volleyball_hard' ? 'vb-hard' : sType}">${slotLabel}</span>
           ${status}
@@ -6057,6 +6122,15 @@ function renderMesoTab() {
 
   wrap.innerHTML = html;
   renderConflictsList();
+  renderRescheduleSuggestion();
+  // Mark compressed days visually
+  for (const p of getPlans()) {
+    if (p.compressed) {
+      const cell = document.querySelector(`.meso-cal-cell[data-date="${p.date}"]`);
+      if (cell) cell.classList.add('compressed');
+    }
+  }
+  attachMesoDragHandlers();
 }
 
 function renderConflictsList() {
@@ -6090,6 +6164,264 @@ function deleteConflict(id) {
   removeConflict(id);
   renderMesoTab();
   showToast('Conflict removed');
+}
+
+// ──── AUTO-RESCHEDULER ────
+// Given the current meso calendar + active conflicts, produce a proposed plan
+// that protects 5/3/1 main lifts, plyo phase ramp, and tries to hit MEV.
+// Returns { changes: [...], moveCount, compressCount, dropCount } or null.
+const LIFT_TYPES = new Set(['push','pull','legs','plyo']);
+const FIVE_THREE_ONE_SLOTS = new Set(['push_bench','push_ohp','pull_deadlift']); // Squat is inside legs_plyo
+
+function scheduleMesoWithConflicts() {
+  const cal = buildMesoCalendar();
+  if (!cal) return null;
+  const conflicts = getConflicts();
+  if (!conflicts.length) return null;
+
+  // Flatten to days array with weekNum
+  const days = cal.weeks.flatMap(w => w.days.map(d => ({ ...d, weekNum: w.num })));
+
+  // Identify which days have a lifting workout that's blocked by a conflict and not yet completed
+  const affected = days.filter(d =>
+    d.conflict &&
+    LIFT_TYPES.has(getSlotType(d.slot)) &&
+    !d.isCompleted &&
+    !d.isPast
+  );
+  if (!affected.length) return null;
+
+  // Build a working copy of slots to modify
+  const slotByDate = {};
+  for (const d of days) slotByDate[d.date] = d.slot;
+  const assignedDates = new Set();
+  const changes = [];
+
+  // Sort affected by priority: 5/3/1 main lifts go first (we want to find them slots before accessories)
+  affected.sort((a, b) => {
+    const aPri = FIVE_THREE_ONE_SLOTS.has(a.slot) || a.slot === 'legs_plyo' ? 0 : 1;
+    const bPri = FIVE_THREE_ONE_SLOTS.has(b.slot) || b.slot === 'legs_plyo' ? 0 : 1;
+    return aPri - bPri;
+  });
+
+  for (const blocked of affected) {
+    // Score each candidate (rest or empty day, not conflicting, not assigned yet, not past)
+    const candidates = days
+      .filter(d =>
+        !assignedDates.has(d.date) &&
+        d.date !== blocked.date &&
+        !d.conflict &&
+        !d.isCompleted &&
+        !d.isPast &&
+        (d.slot === 'rest' || !LIFT_TYPES.has(getSlotType(d.slot)))
+      )
+      .map(d => ({ ...d, score: scoreCandidate(blocked, d, slotByDate) }));
+
+    candidates.sort((a, b) => b.score - a.score);
+    const best = candidates[0];
+
+    if (best && best.score > 0) {
+      // Move it
+      slotByDate[best.date] = blocked.slot;
+      slotByDate[blocked.date] = 'rest';
+      assignedDates.add(best.date);
+      changes.push({
+        kind: 'move',
+        fromDate: blocked.date,
+        toDate: best.date,
+        slot: blocked.slot,
+        rationale: best.weekNum === blocked.weekNum
+          ? `${getSlotShortLabel(blocked.slot)}: shift to ${best.dow === 0 ? 'Sun' : ['Mon','Tue','Wed','Thu','Fri','Sat'][best.dow-1]} ${formatDateShort(best.date).replace(/^[A-Z][a-z]{2}, /, '')} (same week, ${best.slot === 'rest' ? 'rest day' : 'open slot'})`
+          : `${getSlotShortLabel(blocked.slot)}: shift forward ${best.weekNum - blocked.weekNum} week${best.weekNum - blocked.weekNum === 1 ? '' : 's'} to ${formatDateShort(best.date)}`,
+      });
+    } else if (blocked.conflict.type === 'limited') {
+      // Compressed alternative — keep on original date but mark compressed
+      changes.push({
+        kind: 'compress',
+        fromDate: blocked.date,
+        toDate: blocked.date,
+        slot: blocked.slot,
+        rationale: `${getSlotShortLabel(blocked.slot)}: do a shortened version on ${formatDateShort(blocked.date)} — main lift + 3 accessories (~35-40 min, fits a hotel gym window)`,
+      });
+    } else {
+      // Dropped — no slot found
+      changes.push({
+        kind: 'drop',
+        fromDate: blocked.date,
+        slot: blocked.slot,
+        rationale: `${getSlotShortLabel(blocked.slot)}: no open slot found in the meso. Volume will drop this week — protect the next mesocycle.`,
+      });
+    }
+  }
+
+  return {
+    changes,
+    moveCount: changes.filter(c => c.kind === 'move').length,
+    compressCount: changes.filter(c => c.kind === 'compress').length,
+    dropCount: changes.filter(c => c.kind === 'drop').length,
+    proposedSlots: slotByDate,
+  };
+}
+
+function scoreCandidate(blocked, candidate, currentSlots) {
+  let score = 100;
+
+  // Distance: prefer same week heavily
+  const weekDist = Math.abs(candidate.weekNum - blocked.weekNum);
+  score -= weekDist * 25;
+  if (weekDist > 2) score -= 30; // strongly avoid going too far
+
+  // Prefer rest days over volleyball days
+  if (candidate.slot === 'rest') score += 30;
+  if (candidate.slot.startsWith('volleyball_light')) score -= 5; // mostly OK
+  if (candidate.slot.startsWith('volleyball_hard')) score -= 25; // pushing hard before VB hard is bad
+
+  // Plyo phase protection: legs_plyo should stay in the same meso phase
+  if (blocked.slot === 'legs_plyo') {
+    const blockedPhase = getPlyoPhaseForWeek(blocked.weekNum, 6);
+    const candidatePhase = getPlyoPhaseForWeek(candidate.weekNum, 6);
+    if (blockedPhase !== candidatePhase) score -= 40;
+  }
+
+  // Avoid back-to-back same-muscle days (rough check using surrounding dates)
+  const blockedType = getSlotType(blocked.slot);
+  for (let offset = -1; offset <= 1; offset += 2) {
+    const checkDate = new Date(candidate.date + 'T12:00:00');
+    checkDate.setDate(checkDate.getDate() + offset);
+    const checkStr = checkDate.toISOString().split('T')[0];
+    const neighborSlot = currentSlots[checkStr];
+    if (neighborSlot && getSlotType(neighborSlot) === blockedType) score -= 20;
+  }
+
+  // 5/3/1 main lifts: extra boost when finding slots for them
+  if (FIVE_THREE_ONE_SLOTS.has(blocked.slot) || blocked.slot === 'legs_plyo') score += 15;
+
+  return score;
+}
+
+let _rescheduleDismissed = false;
+function renderRescheduleSuggestion() {
+  const el = document.getElementById('meso-reschedule-suggestion');
+  if (!el) return;
+  if (_rescheduleDismissed) { el.innerHTML = ''; return; }
+  const suggestion = scheduleMesoWithConflicts();
+  if (!suggestion || !suggestion.changes.length) { el.innerHTML = ''; return; }
+
+  // Store on window for apply handler
+  window._pendingReschedule = suggestion;
+
+  const changesHtml = suggestion.changes.map(c => {
+    const icon = c.kind === 'move' ? '→' : c.kind === 'compress' ? '✂' : '✗';
+    return `<div class="reschedule-change ${c.kind}">
+      <span class="reschedule-icon">${icon}</span>
+      <span class="reschedule-text">
+        <span class="from-to">${c.kind === 'move' ? `${formatDateShort(c.fromDate)} → ${formatDateShort(c.toDate)}` : formatDateShort(c.fromDate)}</span>
+        <span class="rationale">${escapeHtml(c.rationale)}</span>
+      </span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="reschedule-panel">
+    <div class="reschedule-header">
+      <span class="reschedule-title">Auto-rescheduling suggestion</span>
+      <span class="reschedule-summary">
+        ${suggestion.moveCount ? `<span style="color:var(--accent3)">${suggestion.moveCount} moved</span>` : ''}
+        ${suggestion.compressCount ? `<span style="color:var(--accent)">${suggestion.compressCount} compressed</span>` : ''}
+        ${suggestion.dropCount ? `<span style="color:var(--accent2)">${suggestion.dropCount} dropped</span>` : ''}
+      </span>
+    </div>
+    <div class="reschedule-changes">${changesHtml}</div>
+    <div class="reschedule-actions">
+      <button class="btn btn-primary btn-sm" onclick="applyRescheduleSuggestion()">Apply changes</button>
+      <button class="btn btn-ghost btn-sm" onclick="dismissRescheduleSuggestion()">Discard</button>
+    </div>
+  </div>`;
+}
+
+function applyRescheduleSuggestion() {
+  const sug = window._pendingReschedule;
+  if (!sug) return;
+  const data = loadData();
+  if (!data.plan) data.plan = [];
+
+  // Apply slot changes
+  for (const [date, newSlot] of Object.entries(sug.proposedSlots)) {
+    const existing = data.plan.find(p => p.date === date);
+    if (existing) {
+      existing.templateId = newSlot;
+      delete existing.compressed;
+    } else {
+      data.plan.push({ date, templateId: newSlot });
+    }
+  }
+  // Mark compressed days
+  for (const c of sug.changes.filter(x => x.kind === 'compress')) {
+    const existing = data.plan.find(p => p.date === c.fromDate);
+    if (existing) existing.compressed = true;
+    else data.plan.push({ date: c.fromDate, templateId: c.slot, compressed: true });
+  }
+
+  saveData(data);
+  window._pendingReschedule = null;
+  renderMesoTab();
+  showToast(`Applied: ${sug.moveCount} moves, ${sug.compressCount} compressed, ${sug.dropCount} dropped`);
+}
+
+function dismissRescheduleSuggestion() {
+  _rescheduleDismissed = true;
+  document.getElementById('meso-reschedule-suggestion').innerHTML = '';
+  window._pendingReschedule = null;
+}
+
+// ──── DRAG AND DROP ────
+function attachMesoDragHandlers() {
+  document.querySelectorAll('.meso-cal-cell[data-date]').forEach(cell => {
+    cell.draggable = true;
+    cell.addEventListener('dragstart', mesoDragStart);
+    cell.addEventListener('dragend', mesoDragEnd);
+    cell.addEventListener('dragover', mesoDragOver);
+    cell.addEventListener('dragleave', mesoDragLeave);
+    cell.addEventListener('drop', mesoDragDrop);
+  });
+}
+function mesoDragStart(e) {
+  this.classList.add('dragging');
+  e.dataTransfer.setData('text/plain', this.dataset.date);
+  e.dataTransfer.effectAllowed = 'move';
+}
+function mesoDragEnd(e) {
+  this.classList.remove('dragging');
+  document.querySelectorAll('.meso-cal-cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+}
+function mesoDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  this.classList.add('drag-over');
+}
+function mesoDragLeave(e) {
+  this.classList.remove('drag-over');
+}
+function mesoDragDrop(e) {
+  e.preventDefault();
+  this.classList.remove('drag-over');
+  const sourceDate = e.dataTransfer.getData('text/plain');
+  const targetDate = this.dataset.date;
+  if (!sourceDate || sourceDate === targetDate) return;
+  swapMesoSlots(sourceDate, targetDate);
+}
+
+function swapMesoSlots(sourceDate, targetDate) {
+  // Read each cell's current effective slot
+  const cal = buildMesoCalendar();
+  const allDays = cal.weeks.flatMap(w => w.days);
+  const source = allDays.find(d => d.date === sourceDate);
+  const target = allDays.find(d => d.date === targetDate);
+  if (!source || !target) return;
+
+  setPlanForDate(sourceDate, target.slot);
+  setPlanForDate(targetDate, source.slot);
+  renderMesoTab();
+  showToast(`Swapped ${formatDateShort(sourceDate)} ⇄ ${formatDateShort(targetDate)}`);
 }
 
 // Cell action menu
@@ -6160,6 +6492,7 @@ function clearPlanForDate(date) {
 function markCellConflict(date) {
   addConflict({ startDate: date, endDate: date, type: 'unavailable', notes: 'Manually marked' });
   closeMesoCellMenu();
+  _rescheduleDismissed = false;
   renderMesoTab();
   showToast('Conflict added');
 }
@@ -6490,6 +6823,8 @@ function confirmAddAllConflicts() {
   document.getElementById('meso-chat-response').innerHTML = '';
   // Optionally clear chat so it doesn't pile up
   clearMesoChat();
+  // New conflicts means fresh suggestions should appear
+  _rescheduleDismissed = false;
   renderMesoTab();
   showToast(`Added ${list.length} conflict${list.length === 1 ? '' : 's'}`);
 }
