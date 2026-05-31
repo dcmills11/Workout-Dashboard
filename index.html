@@ -1109,6 +1109,14 @@ body {
   right: 6px;
   font-size: 10px;
 }
+.meso-cal-fulfill-note {
+  display: block;
+  font-size: 9px;
+  margin-top: 3px;
+  letter-spacing: 0.04em;
+}
+.meso-cal-fulfill-note.from { color: var(--accent3); font-weight: 600; }
+.meso-cal-fulfill-note.to { color: var(--accent3); font-style: italic; }
 .meso-cal-status.completed { color: var(--accent3); }
 .meso-cal-status.conflict { color: var(--accent2); }
 
@@ -2089,6 +2097,24 @@ body {
       <textarea class="paste-area" id="ql-paste-input" oninput="updateQuickLogPreview()" placeholder="Bench press 5/3/1&#9;145&#9;5&#9;170&#9;5&#9;190&#9;2&#10;Incline DB Press&#9;2*40&#9;12&#9;10&#9;8&#10;..." style="min-height:120px"></textarea>
       <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">
         Tab-separated. Date row optional — falls back to the date above.
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Counts toward planned workout <span style="font-weight:400;color:var(--text3)">(optional — leave on auto for normal use)</span></label>
+      <select class="form-select" id="ql-fulfills-select">
+        <option value="">Auto-detect (default)</option>
+        <option value="__mixed__">Mixed / freestyle — don't tag a template</option>
+        <option disabled>──────────</option>
+        <option value="push_bench">Push A — Bench day</option>
+        <option value="push_ohp">Push B — OHP day</option>
+        <option value="pull_back">Pull A — Back focused</option>
+        <option value="pull_deadlift">Pull B — Deadlift day</option>
+        <option value="legs">Legs only</option>
+        <option value="legs_plyo">Legs + Plyo</option>
+        <option value="plyo_only">Plyo only</option>
+      </select>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">
+        Use this when the session is improvised or doesn't match its content (e.g., free-style legs that should count as Wed's Pull A). The system will credit the most recent matching planned slot.
       </div>
     </div>
     <div id="ql-preview"></div>
@@ -5663,6 +5689,8 @@ function openQuickLog() {
   }
   document.getElementById('ql-preview').innerHTML = '';
   document.getElementById('ql-save-btn').disabled = true;
+  const fulfillsSel = document.getElementById('ql-fulfills-select');
+  if (fulfillsSel) fulfillsSel.value = '';
 
   // If we were given a prefill (edit-mode), populate from that. Otherwise blank with today's date.
   if (openQuickLog._prefill) {
@@ -5992,10 +6020,17 @@ function applyQuickLogSuggestions() {
 function submitQuickLog() {
   const raw = document.getElementById('ql-paste-input').value;
   const date = document.getElementById('ql-date').value;
+  const fulfillsTag = document.getElementById('ql-fulfills-select')?.value || '';
   if (!raw.trim()) { showToast('Paste your workout first', true); return; }
   try {
     const sessions = parseGoogleSheetsPaste(raw, date);
     if (!sessions.length) { showToast('Nothing to save — check the format', true); return; }
+    // Apply the explicit "counts toward" tag to all parsed sessions
+    if (fulfillsTag === '__mixed__') {
+      sessions.forEach(s => { s.mixedWorkout = true; });
+    } else if (fulfillsTag) {
+      sessions.forEach(s => { s.fulfillsTemplate = fulfillsTag; });
+    }
     const prevStreak = getCurrentStreak();
     addSessions(sessions);
     closeModal('quick-log-modal');
@@ -6103,6 +6138,18 @@ function buildMesoCalendar() {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().split('T')[0];
 
+  // Build maps for late-credit fulfillment links
+  // fulfilledBy: planDate -> sessionDate (this planned slot was completed late on sessionDate)
+  // fulfillsPlan: sessionDate -> {planDate, templateId} (this session date covered another planned slot)
+  const fulfilledByMap = {};
+  const fulfillsPlanMap = {};
+  for (const p of plans) {
+    if (p.fulfilledBy && sessionMap[p.fulfilledBy]) {
+      fulfilledByMap[p.date] = p.fulfilledBy;
+      fulfillsPlanMap[p.fulfilledBy] = { planDate: p.date, templateId: p.templateId };
+    }
+  }
+
   const weeks = [];
   // Alternate satIsPushB across weeks (Week A first)
   let satIsPushB = true;
@@ -6121,15 +6168,21 @@ function buildMesoCalendar() {
       const conflict = conflicts.find(c => iso >= c.startDate && iso <= c.endDate);
       const session = sessionMap[iso];
 
+      const fulfilledByDate = fulfilledByMap[iso] || null;
+      const fulfillsPlan = fulfillsPlanMap[iso] || null;
+
       week.days.push({
         date: iso,
         dow,
         slot,
         isPlanned: !!planEntry,
-        isCompleted: !!session,
+        // A day "counts as completed" if it has its own session OR the planned slot was completed late elsewhere
+        isCompleted: !!session || !!fulfilledByDate,
         isToday: iso === todayStr,
         isPast: day < today,
         conflict,
+        fulfilledByDate,  // this planned slot was completed on another day
+        fulfillsPlan,     // this session date covered an earlier planned slot
       });
     }
     weeks.push(week);
@@ -6177,9 +6230,27 @@ function renderMesoTab() {
         const status = d.isCompleted ? '<span class="meso-cal-status completed">✓</span>'
                      : d.conflict ? '<span class="meso-cal-status conflict">⚠</span>'
                      : '';
+        // Late-credit display logic:
+        // - If this date's plan was fulfilled on another day → show planned slot + "→ done [day]"
+        // - If this date's session fulfilled an earlier planned slot → show fulfilled slot (with original date marker) + "← from [day]"
+        let displaySlot = d.slot;
+        let displayLabel = slotLabel;
+        let displayType = sType === 'vb' && d.slot === 'volleyball_hard' ? 'vb-hard' : sType;
+        let fulfillNote = '';
+        if (d.fulfillsPlan) {
+          // This date covered an earlier planned slot — show that slot's label
+          displaySlot = d.fulfillsPlan.templateId;
+          displayLabel = getSlotShortLabel(displaySlot);
+          displayType = getSlotType(displaySlot);
+          fulfillNote = `<span class="meso-cal-fulfill-note from">← ${formatDateShort(d.fulfillsPlan.planDate).replace(/^[A-Z][a-z]{2}, /, '')}</span>`;
+        } else if (d.fulfilledByDate) {
+          // This planned slot was completed late on another day
+          fulfillNote = `<span class="meso-cal-fulfill-note to">→ ${formatDateShort(d.fulfilledByDate).replace(/^[A-Z][a-z]{2}, /, '')}</span>`;
+        }
         return `<td class="${cellCls}" data-date="${d.date}" onclick="openMesoCellMenu(event,'${d.date}')">
           <span class="meso-cal-date">${dispDate}</span>
-          <span class="meso-cal-slot ${sType === 'vb' && d.slot === 'volleyball_hard' ? 'vb-hard' : sType}">${slotLabel}</span>
+          <span class="meso-cal-slot ${displayType}">${displayLabel}</span>
+          ${fulfillNote}
           ${status}
         </td>`;
       }).join('')}
@@ -7031,11 +7102,43 @@ const LATE_CREDIT_WINDOW_DAYS = 3;
 // Returns a candidate {planDate, templateId, templateName, score, ...} or null
 function findLateCreditCandidate(session) {
   if (!session || !session.exercises?.length) return null;
+  // Explicit "mixed/freestyle" → never credit
+  if (session.mixedWorkout) return null;
+
   const plans = getPlans();
   const sessionMap = getSessionMap();
   const liftingTypes = new Set(['push','pull','legs','plyo']);
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.toISOString().split('T')[0];
+
+  // If the user explicitly tagged this session as fulfilling a specific template,
+  // look for the most recent matching planned slot (today + last N days) and auto-credit.
+  if (session.fulfillsTemplate) {
+    for (let offset = 0; offset <= LATE_CREDIT_WINDOW_DAYS; offset++) {
+      const checkDate = new Date(session.date + 'T12:00:00');
+      checkDate.setDate(checkDate.getDate() - offset);
+      const checkStr = checkDate.toISOString().split('T')[0];
+      if (checkStr > todayStr) continue;
+      const plan = plans.find(p => p.date === checkStr);
+      if (!plan) continue;
+      if (plan.fulfilledBy || plan.skipped) continue;
+      if (offset > 0 && sessionMap[plan.date]) continue;
+      if (plan.templateId !== session.fulfillsTemplate) continue;
+      const tmpl = resolveTemplate(plan.templateId);
+      if (!tmpl) continue;
+      return {
+        planDate: checkStr,
+        templateId: plan.templateId,
+        templateName: tmpl.name,
+        score: 999,
+        matchedExercises: [`(explicit tag: ${tmpl.name})`],
+        mainLiftMatched: true,
+        daysLate: offset,
+        explicit: true,
+      };
+    }
+    return null;
+  }
 
   const candidates = [];
   const sessionDate = session.date;
