@@ -362,6 +362,72 @@ body {
   line-height: 1.5;
 }
 
+/* LATE CREDIT BANNER (offer to credit a session to a recent unlogged planned slot) */
+.late-credit-banner { display: none; margin-bottom: 18px; }
+.late-credit-banner.show { display: block; }
+.late-credit-inner {
+  background: rgba(107,255,213,0.05);
+  border: 1px solid rgba(107,255,213,0.25);
+  border-left: 3px solid var(--accent3);
+  border-radius: var(--rad-lg);
+  padding: 14px 18px;
+}
+.lc-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--accent3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.lc-message {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+.lc-message strong { color: var(--accent3); }
+.lc-detail { font-size: 11px; color: var(--text3); margin-top: 4px; line-height: 1.5; }
+.lc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* VOLUME-GAP SUGGESTIONS PANEL */
+.vol-gap-panel {
+  background: rgba(232,255,107,0.04);
+  border: 1px solid rgba(232,255,107,0.2);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--rad-lg);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  display: none;
+}
+.vol-gap-panel.show { display: block; }
+.vg-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.vg-summary { font-size: 12px; color: var(--text2); margin-bottom: 10px; line-height: 1.6; }
+.vg-gap-list { display: flex; flex-direction: column; gap: 6px; }
+.vg-gap-row {
+  background: var(--surface2);
+  padding: 8px 12px;
+  border-radius: var(--rad);
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.vg-gap-row .muscle { color: var(--text); font-weight: 500; }
+.vg-gap-row .shortfall { color: var(--accent2); font-size: 11px; }
+.vg-gap-row .suggestion { color: var(--accent3); font-size: 11px; }
+
 /* MISSED WORKOUTS BANNER */
 .missed-banner { display: none; margin-bottom: 18px; }
 .missed-banner.show { display: block; }
@@ -1729,6 +1795,10 @@ body {
       <div id="planner-meso-bar"></div>
 
       <div id="streak-display"></div>
+
+      <div id="late-credit-banner" class="late-credit-banner"></div>
+
+      <div id="vol-gap-panel" class="vol-gap-panel"></div>
 
       <div id="missed-banner" class="missed-banner"></div>
 
@@ -4482,6 +4552,7 @@ function getMissedPlannedWorkouts() {
     if (p.date >= todayStr) continue;       // not in the past
     if (p.date < cutoffStr) continue;       // too old
     if (p.skipped) continue;                // user already marked as skipped
+    if (p.fulfilledBy && sessionMap[p.fulfilledBy]) continue; // late-credit fulfilled
     if (sessionMap[p.date]) continue;       // session was logged for that date
     const tmpl = WORKOUT_TEMPLATES[p.templateId];
     if (!tmpl || !liftingTypes.has(tmpl.type)) continue; // only flag actual lifting sessions
@@ -5035,6 +5106,8 @@ function renderTodayCompletedCard(el, session, plannedTmpl, nextWorkout) {
 }
 
 function renderPlanner() {
+  renderLateCreditBanner();
+  renderVolumeGapPanel();
   renderMissedBanner();
   renderNextWorkout();
   renderMesoBar('planner-meso-bar');
@@ -5763,6 +5836,7 @@ function saveEditedSession() {
   const savedClone = JSON.parse(JSON.stringify(_editingSession));
   closeModal('edit-session-modal');
   _editingSession = null;
+  checkAndOfferLateCredits([savedClone]);
   renderPlanner();
   updateFabBadge();
   showToast('Session updated');
@@ -5929,6 +6003,8 @@ function submitQuickLog() {
     _nextWorkoutMode = null; // Reset so the freshly-logged workout shows in the Completed view by default
     // Trigger celebration if this brought today's planned workout to 100% (or hit a streak milestone)
     checkCelebrationForSessions(prevStreak, sessions);
+    // Offer late-session credit if any of these sessions could fulfill a recent missed slot
+    checkAndOfferLateCredits(sessions);
     // Refresh whatever page is active
     const activePage = document.querySelector('.page.active')?.id;
     if (activePage === 'page-planner')   renderPlanner();
@@ -6943,6 +7019,301 @@ function confirmAddConflict() {
   showToast('Conflict added');
 }
 
+// ─── LATE-SESSION CREDIT + VOLUME GAP DETECTION ─────────────────────────────
+// When the user logs a session, this scans the previous N days for any planned
+// lifting day that wasn't logged. If the session content matches the planned template
+// (same main lift OR 3+ matching accessories), it offers to credit the planned slot
+// as fulfilled by the late session.
+
+const LATE_CREDIT_WINDOW_DAYS = 3;
+
+// Returns a candidate {planDate, templateId, templateName, score, ...} or null
+function findLateCreditCandidate(session) {
+  if (!session || !session.exercises?.length) return null;
+  const plans = getPlans();
+  const sessionMap = getSessionMap();
+  const liftingTypes = new Set(['push','pull','legs','plyo']);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().split('T')[0];
+
+  const candidates = [];
+  const sessionDate = session.date;
+
+  for (let offset = 1; offset <= LATE_CREDIT_WINDOW_DAYS; offset++) {
+    const checkDate = new Date(sessionDate + 'T12:00:00');
+    checkDate.setDate(checkDate.getDate() - offset);
+    const checkStr = checkDate.toISOString().split('T')[0];
+    if (checkStr > todayStr) continue; // not past
+
+    const plan = plans.find(p => p.date === checkStr);
+    if (!plan) continue;
+    if (plan.fulfilledBy) continue;        // already credited
+    if (plan.creditDeclined) continue;     // user explicitly declined this for some prior session
+    if (plan.skipped) continue;            // user marked skipped
+    if (sessionMap[plan.date]) continue;   // already has its own session on the planned date
+
+    const tmpl = resolveTemplate(plan.templateId);
+    if (!tmpl || !liftingTypes.has(tmpl.type)) continue;
+
+    const m = computeSessionTemplateMatch(session, tmpl);
+    if (m.score > 0) {
+      candidates.push({
+        planDate: checkStr,
+        templateId: plan.templateId,
+        templateName: tmpl.name,
+        score: m.score,
+        matchedExercises: m.matchedNames,
+        mainLiftMatched: m.mainLiftMatched,
+        daysLate: offset,
+      });
+    }
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0] || null;
+}
+
+function computeSessionTemplateMatch(session, tmpl) {
+  const templateBases = new Map();
+  for (const ex of tmpl.exercises) {
+    templateBases.set(normalizeExerciseName(ex.name), ex);
+  }
+  let matched = 0;
+  let mainLiftMatched = false;
+  const matchedNames = [];
+  for (const ex of session.exercises) {
+    if (ex.isSkipped || !ex.sets.length) continue;
+    const baseKey = normalizeExerciseName(ex.name);
+    if (templateBases.has(baseKey)) {
+      matched++;
+      matchedNames.push(ex.name);
+      if (/5\/3\/1/.test(ex.name)) mainLiftMatched = true;
+    }
+  }
+  // 1 main 5/3/1 match = 10; each accessory = 3
+  let score = mainLiftMatched ? 10 : 0;
+  score += matched * 3;
+  // Threshold: only suggest if the main lift matches OR there are 2+ accessory matches
+  if (!mainLiftMatched && matched < 2) score = 0;
+  return { score, matched, matchedNames, mainLiftMatched };
+}
+
+// Storage for pending credit offers (persisted so banner survives reloads)
+function getPendingCredits() { return loadData().pendingCredits || []; }
+
+function addPendingCredit(candidate) {
+  const data = loadData();
+  if (!data.pendingCredits) data.pendingCredits = [];
+  // De-dupe by planDate
+  if (!data.pendingCredits.some(c => c.planDate === candidate.planDate)) {
+    data.pendingCredits.push(candidate);
+    saveData(data);
+  }
+}
+
+function removePendingCredit(planDate) {
+  const data = loadData();
+  if (!data.pendingCredits) return;
+  data.pendingCredits = data.pendingCredits.filter(c => c.planDate !== planDate);
+  saveData(data);
+}
+
+function acceptLateCredit(planDate, sessionDate) {
+  const data = loadData();
+  if (!data.plan) return;
+  const plan = data.plan.find(p => p.date === planDate);
+  if (plan) {
+    plan.fulfilledBy = sessionDate;
+    delete plan.creditDeclined;
+  }
+  if (data.pendingCredits) data.pendingCredits = data.pendingCredits.filter(c => c.planDate !== planDate);
+  saveData(data);
+  renderPlanner();
+  updateFabBadge();
+  showToast(`Credited ${formatDateShort(planDate)} as fulfilled — streak preserved`);
+}
+
+function declineLateCredit(planDate, sessionDate) {
+  const data = loadData();
+  if (!data.plan) data.plan = [];
+  let plan = data.plan.find(p => p.date === planDate);
+  if (!plan) { plan = { date: planDate, templateId: 'rest', creditDeclined: sessionDate }; data.plan.push(plan); }
+  else plan.creditDeclined = sessionDate;
+  if (data.pendingCredits) data.pendingCredits = data.pendingCredits.filter(c => c.planDate !== planDate);
+  saveData(data);
+  renderPlanner();
+}
+
+function checkAndOfferLateCredits(savedSessions) {
+  if (!savedSessions || !savedSessions.length) return;
+  for (const s of savedSessions) {
+    const candidate = findLateCreditCandidate(s);
+    if (candidate) {
+      addPendingCredit({ ...candidate, sessionDate: s.date });
+    }
+  }
+}
+
+function renderLateCreditBanner() {
+  const el = document.getElementById('late-credit-banner');
+  if (!el) return;
+  const credits = getPendingCredits();
+  if (!credits.length) { el.classList.remove('show'); el.innerHTML = ''; return; }
+  el.classList.add('show');
+  el.innerHTML = credits.map(c => {
+    const mainNote = c.mainLiftMatched ? ' — main 5/3/1 lift matched' : '';
+    return `<div class="late-credit-inner">
+      <div class="lc-title">Late credit offered</div>
+      <div class="lc-message">
+        Your session on <strong>${formatDateShort(c.sessionDate)}</strong> looks like your planned
+        <strong>${escapeHtml(c.templateName)}</strong> from
+        <strong>${formatDateShort(c.planDate)}</strong> (${c.daysLate} day${c.daysLate === 1 ? '' : 's'} late).
+        Credit it as fulfilling that planned slot?
+      </div>
+      <div class="lc-detail">
+        Matched ${c.matchedExercises.length} exercise${c.matchedExercises.length === 1 ? '' : 's'}${mainNote}.
+        Accepting preserves your streak and counts toward this week's volume.
+      </div>
+      <div class="lc-actions">
+        <button class="btn btn-primary btn-sm" onclick="acceptLateCredit('${c.planDate}','${c.sessionDate}')">Yes, credit as ${formatDateShort(c.planDate).split(', ')[0]}</button>
+        <button class="btn btn-ghost btn-sm" onclick="declineLateCredit('${c.planDate}','${c.sessionDate}')">No, separate session</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ──── VOLUME GAP DETECTION (after any session save) ────
+// Compares this week's actual completed volume against MEV for each tracked muscle.
+// Surfaces gaps and proposes upcoming-workout adjustments.
+
+function computeWeekVolumeStatus() {
+  // Use rolling 7 days for actual + projected (planned but not yet logged)
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().split('T')[0];
+  const cutoff = new Date(today); cutoff.setDate(today.getDate() - 7);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const endProj = new Date(today); endProj.setDate(today.getDate() + 7);
+  const endStr = endProj.toISOString().split('T')[0];
+
+  const sessions = getSessions();
+  const plans = getPlans();
+  const sessionMap = getSessionMap();
+
+  // Actual completed (past)
+  const actualVol = {};
+  for (const s of sessions) {
+    if (s.date < cutoffStr || s.date > todayStr) continue;
+    for (const ex of s.exercises) {
+      if (ex.isSkipped) continue;
+      const count = ex.sets.filter(set => !set.skipped && set.reps > 0).length;
+      const muscles = resolveExerciseMuscles(ex.name, ex.muscles);
+      for (const m of muscles) actualVol[m] = (actualVol[m] || 0) + count;
+    }
+  }
+
+  // Planned upcoming (next 7 days, not yet logged)
+  const plannedVol = {};
+  for (const p of plans) {
+    if (p.date <= todayStr || p.date > endStr) continue;
+    if (sessionMap[p.date]) continue; // already logged
+    const tmpl = resolveTemplate(p.templateId);
+    if (!tmpl) continue;
+    for (const ex of tmpl.exercises) {
+      for (const m of ex.muscles) plannedVol[m] = (plannedVol[m] || 0) + ex.sets;
+    }
+  }
+
+  // Compute gaps vs MEV (using mev as the floor target)
+  const gaps = [];
+  for (const [muscle, d] of Object.entries(RP_VOL)) {
+    if (d.mev === 0) continue; // skip muscles with no MEV (front delts etc)
+    const done = actualVol[muscle] || 0;
+    const planned = plannedVol[muscle] || 0;
+    const projected = done + planned;
+    if (projected < d.mev) {
+      gaps.push({
+        muscle: d.label,
+        muscleKey: muscle,
+        done,
+        planned,
+        projected,
+        target: d.mev,
+        shortBy: d.mev - projected,
+      });
+    }
+  }
+  return { actualVol, plannedVol, gaps };
+}
+
+function suggestVolumeAdjustments(gaps) {
+  if (!gaps.length) return [];
+  // Find upcoming planned workouts and identify which exercises hit the under-volumed muscles
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().split('T')[0];
+  const endProj = new Date(today); endProj.setDate(today.getDate() + 7);
+  const endStr = endProj.toISOString().split('T')[0];
+  const plans = getPlans();
+  const sessionMap = getSessionMap();
+
+  const upcomingPlans = plans.filter(p => p.date > todayStr && p.date <= endStr && !sessionMap[p.date]);
+
+  const suggestions = [];
+  for (const gap of gaps) {
+    // Find planned workouts that touch this muscle
+    let bestPlan = null;
+    let bestExName = null;
+    for (const p of upcomingPlans) {
+      const tmpl = resolveTemplate(p.templateId);
+      if (!tmpl) continue;
+      for (const ex of tmpl.exercises) {
+        if (ex.muscles.includes(gap.muscleKey)) {
+          if (!bestPlan) { bestPlan = p; bestExName = ex.name; }
+        }
+      }
+    }
+    if (bestPlan && bestExName) {
+      suggestions.push({
+        muscle: gap.muscle,
+        shortBy: gap.shortBy,
+        targetDate: bestPlan.date,
+        targetTemplate: WORKOUT_TEMPLATES[bestPlan.templateId]?.name || bestPlan.templateId,
+        exerciseName: bestExName,
+        action: `Add ${gap.shortBy} set${gap.shortBy === 1 ? '' : 's'} of ${bestExName}`,
+      });
+    } else {
+      suggestions.push({
+        muscle: gap.muscle,
+        shortBy: gap.shortBy,
+        action: `No upcoming workout hits this muscle — consider adding a session this week`,
+      });
+    }
+  }
+  return suggestions;
+}
+
+function renderVolumeGapPanel() {
+  const el = document.getElementById('vol-gap-panel');
+  if (!el) return;
+  const status = computeWeekVolumeStatus();
+  if (!status.gaps.length) { el.classList.remove('show'); el.innerHTML = ''; return; }
+  const suggestions = suggestVolumeAdjustments(status.gaps);
+
+  el.classList.add('show');
+  el.innerHTML = `<div class="vg-title">⚠ Volume gaps this week</div>
+    <div class="vg-summary">
+      Even after completing your upcoming planned workouts, ${status.gaps.length} muscle${status.gaps.length === 1 ? ' will' : 's will'} fall below MEV (minimum effective volume). Consider adding to upcoming sessions:
+    </div>
+    <div class="vg-gap-list">
+      ${suggestions.map(s => `<div class="vg-gap-row">
+        <div>
+          <span class="muscle">${s.muscle}</span>
+          <span class="shortfall">· short ${s.shortBy} set${s.shortBy === 1 ? '' : 's'}</span>
+        </div>
+        <div class="suggestion">${s.targetDate ? `→ ${escapeHtml(s.action)} on ${formatDateShort(s.targetDate)}` : escapeHtml(s.action)}</div>
+      </div>`).join('')}
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--text3);font-style:italic">These are suggestions only — adjust your upcoming sessions manually if you want to apply them.</div>`;
+}
+
 // ─── STREAK & CELEBRATION ────────────────────────────────────────────────────
 
 // Count consecutive completed planned lift days, walking backward from today.
@@ -6967,8 +7338,9 @@ function getCurrentStreak() {
   let streak = 0;
   for (const p of planEntries) {
     if (p.skipped) continue; // intentional skip-with-makeup — neither counts nor breaks
-    if (p.date === todayStr && !sessionMap[p.date]) continue; // today not yet logged — don't break
+    if (p.date === todayStr && !sessionMap[p.date] && !(p.fulfilledBy && sessionMap[p.fulfilledBy])) continue;
     if (sessionMap[p.date]) streak++;
+    else if (p.fulfilledBy && sessionMap[p.fulfilledBy]) streak++;  // late-credit counts
     else break;
   }
   return streak;
