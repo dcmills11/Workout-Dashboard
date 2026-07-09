@@ -1185,6 +1185,75 @@ body {
   color: var(--accent);
 }
 
+/* HOVER TOOLTIP ON MESO CALENDAR CELLS */
+.meso-tooltip {
+  position: fixed;
+  display: none;
+  z-index: 600;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--rad-lg);
+  padding: 14px 16px;
+  max-width: 400px;
+  width: 360px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.65);
+  font-size: 12px;
+  color: var(--text2);
+  pointer-events: none; /* Lets cursor pass through to next cell smoothly */
+  animation: meso-tooltip-fade 120ms ease-out;
+}
+@keyframes meso-tooltip-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.mt-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+.mt-subtitle {
+  font-size: 11px;
+  color: var(--text3);
+  margin: 3px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.mt-rir { color: var(--accent3); font-weight: 600; }
+.mt-deload { color: var(--accent); font-weight: 700; }
+.mt-phase { color: var(--accent4); }
+.mt-exercises { display: flex; flex-direction: column; gap: 7px; max-height: 460px; overflow-y: auto; }
+.mt-exercise {
+  background: var(--surface2);
+  padding: 8px 11px;
+  border-radius: var(--rad);
+  border-left: 2px solid var(--border2);
+}
+.mt-exercise.has-recommend { border-left-color: var(--accent3); }
+.mt-ex-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.mt-ex-name { font-size: 12px; font-weight: 500; color: var(--text); flex: 1; min-width: 120px; }
+.mt-ex-sets {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 10.5px;
+  color: var(--accent);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+.mt-ex-last { font-size: 11px; color: var(--text2); margin-top: 3px; line-height: 1.4; }
+.mt-ex-last.empty { color: var(--text3); font-style: italic; }
+.mt-ex-last .w { color: var(--text); font-weight: 500; }
+.mt-ex-recommend { font-size: 11px; color: var(--accent3); margin-top: 4px; line-height: 1.4; }
+.mt-ex-recommend strong { color: var(--accent3); font-weight: 700; }
+.mt-empty { color: var(--text3); font-size: 12px; padding: 6px 0; font-style: italic; }
+
 /* Cell action menu */
 .meso-cell-menu {
   position: absolute;
@@ -6279,6 +6348,7 @@ function renderMesoTab() {
     }
   }
   attachMesoDragHandlers();
+  attachMesoHoverHandlers();
 }
 
 function renderConflictsList() {
@@ -6519,6 +6589,229 @@ function dismissRescheduleSuggestion() {
   _rescheduleDismissed = true;
   document.getElementById('meso-reschedule-suggestion').innerHTML = '';
   window._pendingReschedule = null;
+}
+
+// ──── HOVER TOOLTIP WITH RECOMMENDED WEIGHTS ────
+
+let _mesoTooltipShowTimer = null;
+let _mesoTooltipEl = null;
+
+function getMesoTooltipEl() {
+  if (_mesoTooltipEl) return _mesoTooltipEl;
+  const el = document.createElement('div');
+  el.className = 'meso-tooltip';
+  document.body.appendChild(el);
+  _mesoTooltipEl = el;
+  return el;
+}
+
+function hideMesoTooltip() {
+  if (_mesoTooltipShowTimer) { clearTimeout(_mesoTooltipShowTimer); _mesoTooltipShowTimer = null; }
+  const el = _mesoTooltipEl;
+  if (el) el.style.display = 'none';
+}
+
+function showMesoTooltipFor(cellEl, date) {
+  if (_mesoTooltipShowTimer) clearTimeout(_mesoTooltipShowTimer);
+  // 250ms delay so casual mouse passes don't fire tooltips
+  _mesoTooltipShowTimer = setTimeout(() => {
+    const html = buildMesoTooltipContent(date);
+    if (!html) { hideMesoTooltip(); return; }
+    const tip = getMesoTooltipEl();
+    tip.innerHTML = html;
+    tip.style.display = 'block';
+    positionMesoTooltip(tip, cellEl);
+  }, 250);
+}
+
+function positionMesoTooltip(tip, cellEl) {
+  const rect = cellEl.getBoundingClientRect();
+  // First measure with current content
+  const tipRect = tip.getBoundingClientRect();
+  // Default: place to the right of cell, vertically aligned with top
+  let left = rect.right + 8;
+  let top = rect.top;
+  // If would extend past right edge, place to the left
+  if (left + tipRect.width > window.innerWidth - 8) {
+    left = rect.left - tipRect.width - 8;
+  }
+  // If still off-screen on the left, center under the cell
+  if (left < 8) {
+    left = Math.max(8, Math.min(window.innerWidth - tipRect.width - 8, rect.left));
+    top = rect.bottom + 6;
+  }
+  // Don't push off the bottom — anchor near bottom of viewport if needed
+  if (top + tipRect.height > window.innerHeight - 8) {
+    top = window.innerHeight - tipRect.height - 8;
+  }
+  if (top < 8) top = 8;
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
+
+function buildMesoTooltipContent(date) {
+  const cal = buildMesoCalendar();
+  if (!cal) return '';
+  const day = cal.weeks.flatMap(w => w.days).find(d => d.date === date);
+  if (!day) return '';
+
+  // If late credit, show the *actually-done* template (fulfillsPlan), else the slot
+  const effectiveSlotId = day.fulfillsPlan ? day.fulfillsPlan.templateId : day.slot;
+  const tmpl = resolveTemplate(effectiveSlotId);
+  if (!tmpl) return '';
+
+  // Compute meso week for THIS date's RIR target (not just the current calendar week)
+  const m = getMesocycle();
+  let weekNum = null, rir = null, phase = null;
+  if (m && m.startDate) {
+    const start = new Date(m.startDate + 'T12:00:00');
+    const target = new Date(date + 'T12:00:00');
+    const dayOffset = Math.floor((target - start) / 86400000);
+    weekNum = Math.floor(dayOffset / 7) + 1;
+    if (weekNum >= 1 && weekNum <= (m.totalWeeks || 6)) {
+      rir = getRIRForWeek(weekNum, m.totalWeeks);
+      phase = getPlyoPhaseForWeek(weekNum, m.totalWeeks);
+    }
+  }
+
+  // Non-lifting slots: show a brief summary, no exercise breakdown
+  if (!tmpl.exercises || !tmpl.exercises.length) {
+    return `<div class="mt-title">${tmpl.name}</div>
+      <div class="mt-subtitle">${formatDateShort(date)}${weekNum ? ` · Week ${weekNum}` : ''}</div>
+      <div class="mt-empty">No exercises — recovery / conditioning day.</div>`;
+  }
+
+  let header = `<div class="mt-title">${tmpl.name}</div>
+    <div class="mt-subtitle">${formatDateShort(date)}`;
+  if (weekNum) {
+    header += ` · Week ${weekNum} of ${m.totalWeeks || 6}`;
+    if (rir) header += rir.deload ? ` · <span class="mt-deload">DELOAD</span>` : ` · <span class="mt-rir">${rir.label} RIR</span>`;
+    if (effectiveSlotId === 'legs_plyo' && phase) header += ` · <span class="mt-phase">${phase} phase</span>`;
+  }
+  if (day.fulfillsPlan) {
+    header += ` · <span style="color:var(--accent3)">credited ${formatDateShort(day.fulfillsPlan.planDate)}</span>`;
+  }
+  header += `</div>`;
+
+  let exercisesHtml = '<div class="mt-exercises">';
+  for (const ex of tmpl.exercises) {
+    const fullName = formatExerciseFullName(ex);
+    const setsReps = ex.reps ? `${ex.sets} × ${ex.reps}` : `${ex.sets} sets`;
+    const last = getLastPerformedExercise(ex.name);
+    const lastHtml = last
+      ? `<div class="mt-ex-last">Last <span style="color:var(--text3)">(${formatDateShort(last.date)})</span>: ${formatLastSetsCompact(last.sets)}</div>`
+      : `<div class="mt-ex-last empty">No prior log</div>`;
+    const rec = computeWeightRecommendation(ex, last, rir);
+    const recHtml = rec
+      ? `<div class="mt-ex-recommend">→ ${rec}</div>`
+      : '';
+    exercisesHtml += `<div class="mt-exercise ${rec ? 'has-recommend' : ''}">
+      <div class="mt-ex-top">
+        <span class="mt-ex-name">${fullName}</span>
+        <span class="mt-ex-sets">${setsReps}</span>
+      </div>
+      ${lastHtml}
+      ${recHtml}
+    </div>`;
+  }
+  exercisesHtml += '</div>';
+
+  return header + exercisesHtml;
+}
+
+// Compact set display for tooltip (skip muscle tags, etc.)
+function formatLastSetsCompact(sets) {
+  if (!sets || !sets.length) return '';
+  const grouped = {};
+  const order = [];
+  for (const s of sets) {
+    const k = s.weightRaw || (s.weight != null ? String(s.weight) : '?');
+    if (!grouped[k]) { grouped[k] = []; order.push(k); }
+    grouped[k].push(s.reps);
+  }
+  return order.map(k => {
+    const w = k.includes('*') ? k.replace('*', '×')
+      : isNaN(parseFloat(k)) ? k
+      : `${k} lb`;
+    return `<span class="w">${w}</span> × ${grouped[k].join(',')}`;
+  }).join(' · ');
+}
+
+// Parse a rep range string like "8-12", "6-10", "10", "per 5/3/1 cycle"
+function parseRepRange(reps) {
+  if (!reps) return null;
+  const s = String(reps).trim();
+  const range = s.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+  if (range) return { min: parseInt(range[1]), max: parseInt(range[2]) };
+  const single = s.match(/^(\d+)$/);
+  if (single) return { min: parseInt(single[1]), max: parseInt(single[1]) };
+  // Per-leg or per-arm patterns ("10/leg", "8-10/arm") — extract numeric
+  const perSide = s.match(/^(\d+)(?:\s*[-–]\s*(\d+))?\s*\/(?:leg|arm)/);
+  if (perSide) return { min: parseInt(perSide[1]), max: parseInt(perSide[2] || perSide[1]) };
+  return null;
+}
+
+// Compute a recommended weight progression for the next session of an exercise
+// Heuristic: if user hit the top of the rep range across all sets last time, suggest +5lb
+// (or +2.5/hand for dumbbells). Otherwise, same weight + push for more reps.
+function computeWeightRecommendation(plannedEx, lastSession, rir) {
+  if (!lastSession || !lastSession.sets || !lastSession.sets.length) return null;
+  const validSets = lastSession.sets.filter(s => !s.skipped && s.weight != null && s.reps > 0);
+  if (!validSets.length) return null;
+
+  // Deload week: explicitly recommend dropping weight
+  if (rir && rir.deload) {
+    const heaviest = validSets.reduce((m, s) => s.weight > m.weight ? s : m, validSets[0]);
+    const half = Math.round(heaviest.weight * 0.5 / 5) * 5;
+    return `Deload — try ${heaviest.bilateral ? `2×${Math.round(half/2/5)*5} lb` : `${half} lb`} (~50% load)`;
+  }
+
+  // For 5/3/1 main lifts (reps = "per 5/3/1 cycle"), we don't try to compute next %s.
+  // Instead surface the last cycle's top weight as a baseline.
+  if (/5\/3\/1/i.test(String(plannedEx.reps || plannedEx.name))) {
+    const top = validSets.reduce((m, s) => s.weight > m.weight ? s : m, validSets[0]);
+    return `Last cycle top set: <strong>${top.bilateral ? `2×${top.weight} lb` : `${top.weight} lb`} × ${top.reps}</strong>. Bump training max +${plannedEx.muscles.includes('quads') || plannedEx.muscles.includes('hamstrings') ? 10 : 5} lb on new cycle.`;
+  }
+
+  const repRange = parseRepRange(plannedEx.reps);
+  // Heaviest weight last session
+  const heaviest = validSets.reduce((m, s) => s.weight > m.weight ? s : m, validSets[0]);
+  const formatWt = (w, bilateral) => bilateral ? `2×${w} lb` : `${w} lb`;
+  const lastWeightStr = formatWt(heaviest.weight, heaviest.bilateral);
+
+  if (!repRange) {
+    return `<strong>${lastWeightStr}</strong> (same as last time)`;
+  }
+
+  // Did all valid sets hit at least the top of the range?
+  const hitTop = validSets.every(s => s.reps >= repRange.max);
+  const someAtTop = validSets.some(s => s.reps >= repRange.max);
+  const allUnderMin = validSets.every(s => s.reps < repRange.min);
+
+  if (hitTop) {
+    // Progression
+    const inc = heaviest.bilateral ? 2.5 : 5;
+    const newW = heaviest.weight + inc;
+    return `<strong>${formatWt(newW, heaviest.bilateral)}</strong> — hit top of ${repRange.min}-${repRange.max} last time, time to add load`;
+  }
+  if (allUnderMin) {
+    // Drop weight
+    const inc = heaviest.bilateral ? 2.5 : 5;
+    const newW = Math.max(0, heaviest.weight - inc);
+    return `<strong>${formatWt(newW, heaviest.bilateral)}</strong> — was under ${repRange.min} last time, drop a bit`;
+  }
+  if (someAtTop) {
+    return `<strong>${lastWeightStr}</strong> — push for ${repRange.max} reps on all sets to add load next time`;
+  }
+  return `<strong>${lastWeightStr}</strong> — same weight, work toward ${repRange.max} reps`;
+}
+
+function attachMesoHoverHandlers() {
+  document.querySelectorAll('.meso-cal-cell[data-date]').forEach(cell => {
+    cell.addEventListener('mouseenter', () => showMesoTooltipFor(cell, cell.dataset.date));
+    cell.addEventListener('mouseleave', hideMesoTooltip);
+    cell.addEventListener('mousedown', hideMesoTooltip); // hide before drag or click
+  });
 }
 
 // ──── DRAG AND DROP ────
